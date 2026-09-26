@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gym years</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gym years">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0c0a12">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0a12; --panel:#15121d; --text:#f2eef8; --muted:#8a839a;
+  --cell:#25202f; --lit:#a855f7; --lit-soft:rgba(168,85,247,.28);
+  --btn:#a855f7; --btn-text:#0c0a12; --danger:#e26d6d;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+:root[data-theme="light"]{
+  --bg:#f6f3fb; --panel:#ffffff; --text:#1b1626; --muted:#6c6580;
+  --cell:#e3ddee; --lit:#8b3fe0; --lit-soft:rgba(139,63,224,.2);
+  --btn:#8b3fe0; --btn-text:#ffffff;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font-family:Inter,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;padding:20px 16px 48px;max-width:560px;margin:0 auto;overscroll-behavior-y:none}
+h1{font-size:15px;font-weight:500;color:var(--muted);margin:8px 0 4px;text-align:center}
+.sub{font-size:13px;color:var(--muted);text-align:center;margin:0 0 22px}
+
+.today{display:block;width:100%;border:0;border-radius:18px;padding:22px 16px;font:inherit;font-size:20px;font-weight:700;color:var(--btn-text);background:var(--btn);box-shadow:0 0 0 0 var(--lit-soft);transition:transform .12s ease,box-shadow .2s ease,background .2s ease;cursor:pointer}
+.today:active{transform:scale(.98)}
+.today.done{background:var(--panel);color:var(--lit);box-shadow:0 0 0 2px var(--lit),0 0 28px var(--lit-soft)}
+.today small{display:block;font-size:13px;font-weight:500;opacity:.8;margin-top:6px}
+.today:focus-visible{outline:3px solid var(--text);outline-offset:3px}
+
+.stats{display:flex;justify-content:space-between;gap:12px;margin:18px 0 30px;padding:0 4px}
+.stat{flex:1;text-align:center}
+.stat b{display:block;font-size:26px;font-weight:700;line-height:1.1}
+.stat span{font-size:12px;color:var(--muted)}
+
+.year{margin-bottom:34px}
+.year h2{font-size:30px;font-weight:700;margin:0 0 6px;letter-spacing:-.02em}
+.months{position:relative;height:16px;font-size:11px;color:var(--muted);margin-bottom:6px}
+.months span{position:absolute;top:0}
+.grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,1fr);gap:2px;width:100%}
+.d{aspect-ratio:1/1;border-radius:2px;background:var(--cell);border:0;padding:0;margin:0;display:block;transition:background .15s}
+.d.on{background:var(--lit)}
+.d.future{visibility:hidden}
+.d.today-cell{outline:1.5px solid var(--text);outline-offset:-1.5px}
+.d:focus-visible{outline:2px solid var(--text);outline-offset:1px}
+
+.tools{margin-top:26px;border-top:1px solid var(--cell);padding-top:18px}
+.tools summary{color:var(--muted);font-size:13px;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+.tools summary::-webkit-details-marker{display:none}
+.tools summary::after{content:"+"}
+.tools[open] summary::after{content:"-"}
+.tools p{font-size:13px;color:var(--muted);line-height:1.5}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.b{font:inherit;font-size:13px;font-weight:500;padding:9px 13px;border-radius:9px;border:1px solid var(--cell);background:var(--panel);color:var(--text);cursor:pointer}
+.b.warn{color:var(--danger);border-color:var(--danger)}
+textarea{width:100%;min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--panel);color:var(--text);border:1px solid var(--cell);border-radius:9px;padding:10px;resize:vertical}
+.note{font-size:12px;color:var(--muted);min-height:16px;margin-top:6px}
+.toggle{position:fixed;right:14px;top:calc(12px + env(safe-area-inset-top,0px));font:inherit;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--cell);border-radius:999px;padding:6px 10px;cursor:pointer}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<button class="toggle" id="theme" aria-label="Switch theme">Theme</button>
+<h1>Gym years</h1>
+<p class="sub">One square per day, lit on the days you trained.</p>
+
+<button class="today" id="today"></button>
+
+<div class="stats">
+  <div class="stat"><b id="streak">0</b><span>day streak</span></div>
+  <div class="stat"><b id="ytd">0</b><span id="ytdLabel">days this year</span></div>
+  <div class="stat"><b id="total">0</b><span>all time</span></div>
+</div>
+
+<div id="years"></div>
+
+<details class="tools">
+  <summary>Backup and restore</summary>
+  <p>Your days are stored only in this browser. Copy the text below somewhere safe now and then, and paste it back here if you get a new phone.</p>
+  <div class="row">
+    <button class="b" id="export">Show backup text</button>
+    <button class="b" id="copy">Copy to clipboard</button>
+    <button class="b" id="restore">Restore from text</button>
+    <button class="b warn" id="clear">Erase everything</button>
+  </div>
+  <textarea id="io" placeholder='Paste backup text here to restore, or tap "Show backup text".'></textarea>
+  <div class="note" id="note"></div>
+</details>
+
+<script>
+(function(){
+  var KEY='gymyears.days.v1', THEME='gymyears.theme';
+  var days=new Set();
+
+  function load(){ try{ var raw=localStorage.getItem(KEY); if(raw){ JSON.parse(raw).forEach(function(d){days.add(d);}); } }catch(e){} }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(Array.from(days).sort())); }catch(e){ note('Could not save. Storage may be blocked in this browser.'); } }
+  function pad(n){return (n<10?'0':'')+n;}
+  function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+  function todayIso(){return iso(new Date());}
+  function note(t){document.getElementById('note').textContent=t||'';}
+
+  function streak(){
+    var d=new Date(), n=0;
+    if(!days.has(iso(d))) d.setDate(d.getDate()-1);
+    while(days.has(iso(d))){ n++; d.setDate(d.getDate()-1); }
+    return n;
+  }
+
+  function render(){
+    var t=todayIso(), now=new Date(), thisYear=now.getFullYear();
+    var btn=document.getElementById('today');
+    var done=days.has(t);
+    btn.className='today'+(done?' done':'');
+    btn.innerHTML=done?'Trained today<small>Tap to undo</small>':'I trained today<small>Tap once to light up today</small>';
+    document.getElementById('streak').textContent=streak();
+    var ytd=0; days.forEach(function(d){ if(d.slice(0,4)==String(thisYear)) ytd++; });
+    document.getElementById('ytd').textContent=ytd;
+    document.getElementById('ytdLabel').textContent='days in '+thisYear;
+    document.getElementById('total').textContent=days.size;
+
+    var years=[thisYear];
+    days.forEach(function(d){ var y=+d.slice(0,4); if(years.indexOf(y)<0) years.push(y); });
+    years.sort(function(a,b){return b-a;});
+
+    var host=document.getElementById('years'); host.innerHTML='';
+    var mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    years.forEach(function(y){
+      var sec=document.createElement('section'); sec.className='year';
+      var h=document.createElement('h2'); h.textContent=y; sec.appendChild(h);
+      var start=new Date(y,0,1); start.setDate(start.getDate()-start.getDay());
+      var end=new Date(y,11,31);
+      var weeks=Math.ceil(((end-start)/86400000+1)/7);
+      var months=document.createElement('div'); months.className='months';
+      for(var m=0;m<12;m++){
+        var first=new Date(y,m,1);
+        var col=Math.floor((first-start)/86400000/7);
+        var s=document.createElement('span'); s.textContent=mn[m]; s.style.left=(col/weeks*100)+'%';
+        months.appendChild(s);
+      }
+      sec.appendChild(months);
+      var grid=document.createElement('div'); grid.className='grid';
+      grid.style.gridTemplateColumns='repeat('+weeks+',1fr)';
+      var cur=new Date(start);
+      for(var i=0;i<weeks*7;i++){
+        var cell=document.createElement('button'); cell.className='d';
+        var k=iso(cur);
+        if(cur.getFullYear()!==y){ cell.className+=' future'; cell.tabIndex=-1; cell.disabled=true; }
+        else{
+          if(days.has(k)) cell.className+=' on';
+          if(k===t) cell.className+=' today-cell';
+          if(cur>now){ cell.className+=' future'; cell.disabled=true; cell.tabIndex=-1; }
+          cell.setAttribute('aria-label',k+(days.has(k)?', trained':''));
+          cell.dataset.d=k;
+        }
+        grid.appendChild(cell);
+        cur.setDate(cur.getDate()+1);
+      }
+      sec.appendChild(grid);
+      host.appendChild(sec);
+    });
+  }
+
+  function toggle(k){ if(days.has(k)) days.delete(k); else days.add(k); save(); render(); }
+
+  document.getElementById('today').addEventListener('click',function(){ toggle(todayIso()); });
+  document.getElementById('years').addEventListener('click',function(e){
+    var b=e.target.closest('.d'); if(!b||!b.dataset.d) return;
+    if(!confirm((days.has(b.dataset.d)?'Unmark ':'Mark ')+b.dataset.d+'?')) return;
+    toggle(b.dataset.d);
+  });
+
+  document.getElementById('export').addEventListener('click',function(){
+    document.getElementById('io').value=JSON.stringify(Array.from(days).sort());
+    note(days.size+' days in backup text.');
+  });
+  document.getElementById('copy').addEventListener('click',function(){
+    var txt=JSON.stringify(Array.from(days).sort());
+    document.getElementById('io').value=txt;
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){note('Copied.');},function(){note('Copy failed. Select the text and copy it by hand.');}); }
+    else note('Clipboard unavailable. Select the text and copy it by hand.');
+  });
+  document.getElementById('restore').addEventListener('click',function(){
+    var v=document.getElementById('io').value.trim(); if(!v){note('Paste backup text first.');return;}
+    try{
+      var arr=JSON.parse(v); if(!Array.isArray(arr)) throw 0;
+      var added=0; arr.forEach(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d)&&!days.has(d)){days.add(d);added++;} });
+      save(); render(); note('Restored. '+added+' new days added.');
+    }catch(e){ note('That text is not a valid backup.'); }
+  });
+  document.getElementById('clear').addEventListener('click',function(){
+    if(!confirm('Erase every logged day? This cannot be undone.')) return;
+    days.clear(); save(); render(); note('Erased.');
+  });
+
+  var root=document.documentElement;
+  try{ var th=localStorage.getItem(THEME); if(th) root.setAttribute('data-theme',th); }catch(e){}
+  document.getElementById('theme').addEventListener('click',function(){
+    var next=root.getAttribute('data-theme')==='light'?'dark':'light';
+    root.setAttribute('data-theme',next);
+    try{ localStorage.setItem(THEME,next); }catch(e){}
+  });
+
+  load(); render();
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) render(); });
+})();
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}</script>
+</body>
+</html>
