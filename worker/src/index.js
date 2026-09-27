@@ -1,10 +1,12 @@
 // TaskTracker sync worker.
 //
-// Identity: the app signs the user in with Google and posts the resulting ID
-// token to POST /auth/google once. The worker verifies Google's signature and
-// hands back its own 90-day session token. Every later request carries that
-// session token as a Bearer header. Days are keyed by the Google account id
-// (the token's `sub`), so any device signed in with the same account shares them.
+// Identity: GET /auth/start sends the browser to Google's sign-in page. Google
+// returns to GET /auth/callback with a code, which the worker exchanges (using
+// the client secret) for an ID token. The worker verifies it, issues its own
+// 90-day session token, and redirects back to the app with the token in the
+// URL fragment. Every later request carries that session token as a Bearer
+// header. Days are keyed by the Google account id (the token's `sub`), so any
+// device signed in with the same account shares them.
 //
 // Data: POST /sync sends every day the device knows about as
 //   { days: { "2026-09-26": { on: 1, t: 1727000000000 }, ... } }
@@ -16,6 +18,9 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DAYS = 20000;
 const SESSION_TTL = 90 * 24 * 3600;
 const GOOGLE_CERTS = 'https://www.googleapis.com/oauth2/v3/certs';
+const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
+const STATE_TTL = 600;
 
 let jwksCache = { keys: null, until: 0 };
 
@@ -25,7 +30,8 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const url = new URL(req.url);
     try {
-      if (url.pathname === '/auth/google' && req.method === 'POST') return await signIn(req, env, cors);
+      if (url.pathname === '/auth/start' && req.method === 'GET') return await authStart(req, env, url);
+      if (url.pathname === '/auth/callback' && req.method === 'GET') return await authCallback(req, env, url);
       if (url.pathname === '/auth/logout' && req.method === 'POST') return await signOut(req, env, cors);
       if (url.pathname === '/me' && req.method === 'GET') return await me(req, env, cors);
       if (url.pathname === '/sync' && (req.method === 'GET' || req.method === 'POST')) return await sync(req, env, cors);
@@ -38,16 +44,64 @@ export default {
 
 // --- auth -----------------------------------------------------------------
 
-async function signIn(req, env, cors) {
-  let body;
-  try { body = await req.json(); } catch { return json({ error: 'bad json' }, 400, cors); }
-  const claims = await verifyGoogleIdToken(body && body.credential, env.GOOGLE_CLIENT_ID);
-  if (!claims) return json({ error: 'invalid google token' }, 401, cors);
+function allowedOrigins(env) {
+  return (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+// Where Google should send the browser back to: this worker's callback route.
+function callbackUrl(url) {
+  return url.origin + '/auth/callback';
+}
+
+async function authStart(req, env, url) {
+  const ret = url.searchParams.get('return') || '';
+  let retUrl;
+  try { retUrl = new URL(ret); } catch { return json({ error: 'bad return url' }, 400, {}); }
+  if (!allowedOrigins(env).includes(retUrl.origin)) return json({ error: 'return url not allowed' }, 400, {});
+
+  const state = randomToken();
+  await env.DAYS.put('st:' + state, JSON.stringify({ ret: retUrl.origin + retUrl.pathname }), { expirationTtl: STATE_TTL });
+  const q = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID,
+    redirect_uri: callbackUrl(url),
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    prompt: 'select_account',
+  });
+  return Response.redirect(GOOGLE_AUTH + '?' + q, 302);
+}
+
+async function authCallback(req, env, url) {
+  const state = url.searchParams.get('state') || '';
+  const code = url.searchParams.get('code') || '';
+  const stKey = 'st:' + state;
+  const st = state ? await env.DAYS.get(stKey, 'json') : null;
+  if (!st) return html('Sign-in link expired. Go back to the app and try again.', 400);
+  await env.DAYS.delete(stKey);
+  if (!code) return Response.redirect(st.ret + '#auth=cancelled', 302);
+
+  const tokenRes = await fetch(GOOGLE_TOKEN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: callbackUrl(url),
+      grant_type: 'authorization_code',
+    }),
+  });
+  if (!tokenRes.ok) return Response.redirect(st.ret + '#auth=failed', 302);
+  const tokens = await tokenRes.json();
+  const claims = await verifyGoogleIdToken(tokens.id_token, env.GOOGLE_CLIENT_ID);
+  if (!claims) return Response.redirect(st.ret + '#auth=failed', 302);
 
   const token = randomToken();
   const session = { sub: claims.sub, name: claims.name || '', email: claims.email || '', at: Date.now() };
   await env.DAYS.put('s:' + (await sha256(token)), JSON.stringify(session), { expirationTtl: SESSION_TTL });
-  return json({ token, name: session.name, email: session.email }, 200, cors);
+  // The fragment never reaches a server, so the token only lands in the app.
+  return Response.redirect(st.ret + '#session=' + token, 302);
 }
 
 async function signOut(req, env, cors) {
@@ -149,7 +203,7 @@ async function sync(req, env, cors) {
 
 function corsHeaders(req, env) {
   const origin = req.headers.get('Origin') || '';
-  const allowed = (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const allowed = allowedOrigins(env);
   const h = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type',
@@ -158,6 +212,12 @@ function corsHeaders(req, env) {
   };
   if (allowed.includes(origin)) h['Access-Control-Allow-Origin'] = origin;
   return h;
+}
+
+function html(text, status) {
+  return new Response('<!doctype html><meta charset="utf-8"><title>TaskTracker</title><p style="font:16px system-ui;padding:24px">' + text + '</p>', {
+    status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
 }
 
 function json(obj, status, headers) {
