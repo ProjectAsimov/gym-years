@@ -1,11 +1,17 @@
-node_modules/
 app/build/
 build/
 .gradle/
-dist/
-local.properties
 *.apk
 *.aab
-*.idsig
 *.keystore
 *.jks
+local.properties
+dist/
+*.idsig
+
+# Not part of the requested list, but added defensively: the Bubblewrap CLI
+# itself (an npm-installed build tool, not app source) and its lockfile churn
+# should never be committed.
+node_modules/
+manifest-checksum.txt
+hs_err_pid*.log

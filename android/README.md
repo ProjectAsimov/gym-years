@@ -1,43 +1,97 @@
-# Android wrapper (Trusted Web Activity)
+# TaskTracker — Android TWA (Trusted Web Activity)
 
-Wraps https://projectasimov.github.io/tasktracker/ as an Android app with
-[Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap). The web app is
-the real app; this shell just launches it full-screen and gives it a Play
-Store listing. Package `com.projectasimov.tasktracker`.
+This project packages the TaskTracker PWA (https://projectasimov.github.io/tasktracker/)
+as an Android app using [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap), for
+distribution through Google Play.
 
-## Release a new version
+- **Package ID:** `com.projectasimov.tasktracker`
+- **Host:** `projectasimov.github.io`
+- **Start URL:** `/tasktracker/`
 
-1. Bump `appVersionCode` (+1) and `appVersionName` in `twa-manifest.json`.
-2. `npx @bubblewrap/cli update` (regenerates the Android project from the manifest), then `npx @bubblewrap/cli build`.
-3. Sign the bundle with the upload key (Bubblewrap signs the APK; the bundle needs jarsigner):
+## Signing key
 
-```
-jarsigner -keystore %USERPROFILE%\.secrets\tasktracker\android-upload.keystore ^
-  -storepass:file %USERPROFILE%\.secrets\tasktracker\android-upload.txt ^
-  -keypass:file %USERPROFILE%\.secrets\tasktracker\android-upload.txt ^
-  -sigalg SHA256withRSA -digestalg SHA-256 ^
-  app\build\outputs\bundle\release\app-release.aab upload
-```
+The upload keystore lives outside this repository (never commit a keystore):
 
-4. Upload the `.aab` in the Play Console.
+- Keystore: `C:\Users\User\.secrets\tasktracker\android-upload.keystore`
+- Alias: `upload`
+- Password: `C:\Users\User\.secrets\tasktracker\android-upload.txt` (plain text file,
+  same password for the store and the key). Treat this file like any other secret —
+  it is not backed up anywhere else.
 
-Web-only changes never need a new Android release; the shell loads the live site.
+`twa-manifest.json` only references the keystore's path and alias; it never stores the
+password. Google Play App Signing wraps this upload key once the app is enrolled — Play
+re-signs the app with its own app signing key for distribution, and this upload key is
+only used to authenticate uploads to the Play Console.
 
-## Keys
+If the keystore or password file is ever lost or compromised, generate a new keystore and
+follow Google Play's key-reset process (requires Google's help since Play App Signing is
+in use), or use Play's "request upload key reset" flow.
 
-The upload keystore and its password live outside the repo in
-`%USERPROFILE%\.secrets\tasktracker\` (`android-upload.keystore`, alias
-`upload`; password in `android-upload.txt`). Play App Signing holds the real
-app signing key; this key only signs uploads and can be reset through Play
-support if lost. Back both files up somewhere safe.
+## Bumping the version and rebuilding
+
+1. Edit `twa-manifest.json`:
+   - Increment `appVersionCode` (must strictly increase for every Play Store upload).
+   - Update `appVersionName` to the new human-readable version (e.g. `1.0.1`).
+2. Regenerate the Android project so the manifest changes take effect:
+   ```powershell
+   cd "C:\Claude Projects\gym-years\android"
+   node_modules\.bin\bubblewrap update
+   ```
+   (Accept the prompt to apply manifest changes; when it asks for versionCode/versionName,
+   the values already in `twa-manifest.json` are used automatically if `appVersionName`
+   was already updated by hand.)
+3. Rebuild and sign:
+   ```powershell
+   cd "C:\Claude Projects\gym-years\android"
+   $env:BUBBLEWRAP_KEYSTORE_PASSWORD = (Get-Content "C:\Users\User\.secrets\tasktracker\android-upload.txt" -Raw).Trim()
+   $env:BUBBLEWRAP_KEY_PASSWORD = $env:BUBBLEWRAP_KEYSTORE_PASSWORD
+   node_modules\.bin\bubblewrap.cmd build
+   Remove-Item Env:\BUBBLEWRAP_KEYSTORE_PASSWORD
+   Remove-Item Env:\BUBBLEWRAP_KEY_PASSWORD
+   ```
+   This produces `app-release-bundle.aab` (upload this to Play Console) and
+   `app-release-signed.apk` (useful for local/manual testing) in this directory.
+4. Copy the new bundle into `dist/` with a version-tagged name, e.g.:
+   ```powershell
+   Copy-Item app-release-bundle.aab "dist\tasktracker-1.0.1.aab"
+   ```
+
+### Notes on this environment
+
+- The JDK and Android SDK used by Bubblewrap are **not** the CLI's default download: this
+  machine had `NoDefaultCurrentDirectoryInExePath=1` set, and Bubblewrap's own JDK auto
+  installer download a 32-bit (x86) JDK 17 that OOMs on Gradle's build daemon under a
+  normal-sized heap. This project's Bubblewrap config
+  (`C:\Users\User\.bubblewrap\config.json`) instead points at a manually installed 64-bit
+  Temurin JDK 17 at `C:\Users\User\.bubblewrap\jdk64\jdk-17.0.20.1+1`.
+- `node_modules\@bubblewrap\core\dist\lib\jdk\JdkHelper.js` has a small local patch: on this
+  machine `process.env` already has a `PATH` key (uppercase) from the shell, and
+  Bubblewrap's Windows code unconditionally sets a `Path` (title case) key without
+  removing the old one, which left two conflicting PATH entries in the child process
+  environment and broke `gradlew.bat` / `jarsigner` resolution. The patch removes any
+  differently-cased duplicate before writing the merged PATH. If you reinstall
+  `node_modules` from scratch, you may need to reapply this patch (or ensure your shell
+  only ever has one canonical-case `Path`/`PATH` variable).
+- Building from the command line always adds the project directory
+  (`C:\Claude Projects\gym-years\android`) to `PATH` before invoking Bubblewrap so that
+  `gradlew.bat` can be found (this machine disables the default "search current directory
+  first" behavior for `cmd.exe`).
+
+## Play Console — Internal testing track
+
+1. Create the app in Play Console (if not already created) with package name
+   `com.projectasimov.tasktracker`.
+2. Enroll in Play App Signing when prompted during the first upload.
+3. Go to **Testing → Internal testing → Create new release**.
+4. Upload `dist\tasktracker-1.0.1.aab` (or whichever versioned file you just built).
+5. Fill in release notes, save, and roll out to internal testing.
+6. Add testers (by email or Google Group) under the Internal testing track's "Testers" tab,
+   and share the opt-in URL Play generates.
 
 ## Digital Asset Links
 
-`assetlinks.json` here must be published at
-`https://projectasimov.github.io/.well-known/assetlinks.json` (the
-`ProjectAsimov.github.io` repo). It carries the SHA-256 of the certificate
-that signs the *installed* app. After enrolling in Play App Signing, add the
-**app signing key** certificate fingerprint from Play Console → Setup → App
-integrity alongside the upload key's, or the app opens with a browser bar.
-
-JDK and Android SDK downloaded by Bubblewrap live in `%USERPROFILE%\.bubblewrap\`.
+`assetlinks.json` in this directory contains the Digital Asset Links statement that must be
+published at `https://projectasimov.github.io/.well-known/assetlinks.json` so Chrome treats
+the TWA as verified (removing the browser URL bar). Copy its contents into the PWA repo's
+`.well-known/assetlinks.json` and deploy it. If the signing key ever changes (e.g. after a
+Play App Signing key rotation), regenerate this file with the new SHA-256 fingerprint.

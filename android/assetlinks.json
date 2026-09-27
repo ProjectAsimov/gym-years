@@ -1,13 +1,11 @@
 [
   {
-    "relation": [
-      "delegate_permission/common.handle_all_urls"
-    ],
+    "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
       "package_name": "com.projectasimov.tasktracker",
       "sha256_cert_fingerprints": [
-        "E3:8C:81:B1:78:49:4A:45:A3:A7:F3:0D:58:4E:8C:42:8B:D0:97:96:C9:B7:7A:BE:0C:A0:8A:D5:42:B4:24:12"
+        "5D:AF:0B:9B:DA:1E:61:84:AB:97:1A:41:1A:17:4F:9D:A6:FB:E5:BF:04:C2:28:C4:DF:55:99:2D:05:64:34:24"
       ]
     }
   }
