@@ -92,10 +92,18 @@ async function authCallback(req, env, url) {
       grant_type: 'authorization_code',
     }),
   });
-  if (!tokenRes.ok) return Response.redirect(st.ret + '#auth=failed', 302);
+  if (!tokenRes.ok) {
+    // Google explains rejections in the body; keep that in the logs and send a short reason to the app.
+    const detail = await tokenRes.text().catch(() => '');
+    console.error('token exchange failed', tokenRes.status, detail.slice(0, 300));
+    return Response.redirect(st.ret + '#auth=failed&r=exchange' + tokenRes.status, 302);
+  }
   const tokens = await tokenRes.json();
   const claims = await verifyGoogleIdToken(tokens.id_token, env.GOOGLE_CLIENT_ID);
-  if (!claims) return Response.redirect(st.ret + '#auth=failed', 302);
+  if (!claims) {
+    console.error('id token rejected');
+    return Response.redirect(st.ret + '#auth=failed&r=verify', 302);
+  }
 
   const token = randomToken();
   const session = { sub: claims.sub, name: claims.name || '', email: claims.email || '', at: Date.now() };

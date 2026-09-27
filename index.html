@@ -548,15 +548,15 @@ dialog.center{margin:auto;padding:16px}
   $('signInWelcome').addEventListener('click',signIn);
   function finishSignIn(){
     var m=/^#session=([A-Za-z0-9_-]{40,128})$/.exec(location.hash);
-    var failed=/^#auth=(failed|cancelled)$/.exec(location.hash);
+    var failed=/^#auth=(failed|cancelled)(?:&r=([a-z0-9]+))?$/.exec(location.hash);
     if(m||failed) history.replaceState(history.state,'',location.pathname+location.search);
-    if(failed){ syncNote(failed[1]==='cancelled'?'Sign-in cancelled.':'Sign-in did not complete. Try again.'); return; }
+    if(failed){ syncNote(failed[1]==='cancelled'?'Sign-in cancelled.':'Sign-in did not complete ('+(failed[2]||'return')+'). Try again.'); return; }
     if(!m) return;
     var tok=m[1];
     setSession({token:tok,name:'',email:''});
     syncNote('Signing in…');
     fetch(SYNC_URL+'/me',{headers:{'Authorization':'Bearer '+tok}})
-      .then(function(r){ if(!r.ok) throw new Error('Sign-in did not complete. Try again.'); return r.json(); })
+      .then(function(r){ if(!r.ok) throw new Error('Sign-in did not complete (session '+r.status+'). Try again.'); return r.json(); })
       .then(function(me){ setSession({token:tok,name:me.name||'',email:me.email||''}); syncNote(''); sync(); })
       .catch(function(e){ setSession(null); syncNote((e&&e.message)||'Could not reach the sync server.'); });
   }
