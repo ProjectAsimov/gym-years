@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{
   --bg:#0c0a12; --panel:#15121d; --text:#f2eef8; --muted:#8a839a;
@@ -143,16 +144,11 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <details class="tools" id="syncTools">
   <summary>Sync across devices</summary>
   <p id="syncHelp"></p>
-  <div class="row" id="syncOff">
-    <button class="b" id="syncOn">Turn on sync</button>
-    <button class="b" id="syncJoin">Use a code from another device</button>
-  </div>
-  <div class="row" id="syncOnRow" hidden>
-    <button class="b" id="syncShow">Show sync code</button>
+  <div id="signedOut"><div id="gsiBtn"></div></div>
+  <div class="row" id="signedIn" hidden>
     <button class="b" id="syncNow">Sync now</button>
-    <button class="b warn" id="syncStop">Turn off sync</button>
+    <button class="b warn" id="signOut">Sign out</button>
   </div>
-  <textarea id="syncIo" placeholder="Paste a sync code here to join, or tap &quot;Show sync code&quot;."></textarea>
   <div class="note" id="syncNote"></div>
 </details>
 
@@ -205,9 +201,10 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <script>
 (function(){
-  var KEY='gymyears.days.v1', LOG='gymyears.log.v2', THEME='gymyears.theme', SYNC='gymyears.sync';
-  // Set this to the deployed worker URL (see worker/README.md). Empty disables sync.
+  var KEY='gymyears.days.v1', LOG='gymyears.log.v2', THEME='gymyears.theme', SESSION='gymyears.session';
+  // Sync backend (see worker/README.md). Both must be set for the sign-in UI to appear.
   var SYNC_URL='https://tasktracker-sync.projectasimov.workers.dev';
+  var GOOGLE_CLIENT_ID='712676467852-6giqqf5fg2viqsue21kad9jcbhg2st5m.apps.googleusercontent.com';
   // log: every day ever touched, as {on:0|1, t:ms}. days is the derived set of on days.
   var log={};
   var MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -472,6 +469,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
       else{ root.setAttribute('data-theme',b.dataset.mode); localStorage.setItem(THEME,b.dataset.mode); }
     }catch(e){}
     paintTheme();
+    if(typeof renderGsi==='function') renderGsi();
   });
 
   // The settings sheet gets a history entry too, so the phone's back button closes it.
@@ -485,31 +483,50 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   if(window.matchMedia) window.matchMedia('(prefers-color-scheme: light)').addEventListener('change',paintTheme);
   paintTheme();
 
-  // Sync: a random code identifies this user's data on the worker. The whole log is
-  // posted and the worker sends back the merged log (newest change per day wins).
-  var syncToken='', syncTimer=null, syncBusy=false, syncAt=0;
-  try{ syncToken=localStorage.getItem(SYNC)||''; }catch(e){}
+  // Sync: the user signs in with Google once; the worker swaps Google's ID token for a
+  // 90-day session token kept here. The whole log is posted and the worker sends back
+  // the merged log (newest change per day wins).
+  var session=null, syncTimer=null, syncBusy=false, syncAt=0, gsiReady=false;
+  try{ session=JSON.parse(localStorage.getItem(SESSION)||'null'); localStorage.removeItem('gymyears.sync'); }catch(e){}
   var $=function(id){ return document.getElementById(id); };
   function syncNote(t){ $('syncNote').textContent=t||''; }
-  function newToken(){
-    var b=new Uint8Array(32); crypto.getRandomValues(b);
-    return btoa(String.fromCharCode.apply(null,b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  }
+  function setSession(s){ session=s; try{ if(s) localStorage.setItem(SESSION,JSON.stringify(s)); else localStorage.removeItem(SESSION); }catch(e){} paintSync(); }
   function paintSync(){
-    var ready=!!SYNC_URL, on=ready&&!!syncToken;
-    $('syncOff').hidden=on||!ready; $('syncOnRow').hidden=!on;
+    var ready=!!SYNC_URL&&!!GOOGLE_CLIENT_ID, on=ready&&!!session;
+    $('signedOut').hidden=on||!ready; $('signedIn').hidden=!on;
     $('syncHelp').textContent=!ready?'Sync is not set up in this build.'
-      :on?'This device syncs to your private copy on the sync server. Show the code and paste it into the app on another device to link them.'
-      :'Keep the same days on every device. Turning on sync creates a private code; anyone with the code can see your days, so share it only with your own devices.';
+      :on?'Signed in as '+(session.email||session.name||'your Google account')+'. Your days sync to every device signed in with this account.'
+      :'Sign in with Google to keep the same days on every device. Days already on this device are kept and merged in.';
+    if(ready&&!on) renderGsi();
   }
-  function queueSync(){ if(!SYNC_URL||!syncToken) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync,1500); }
+  function renderGsi(){
+    if(!gsiReady||!window.google||!google.accounts) return;
+    var host=$('gsiBtn'); host.innerHTML='';
+    google.accounts.id.renderButton(host,{theme:isLight()?'outline':'filled_black',size:'large',shape:'pill',text:'signin_with',width:Math.min(300,host.clientWidth||300)});
+  }
+  window.onGoogleLibraryLoad=function(){
+    gsiReady=true;
+    google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:onGoogleCredential,ux_mode:'popup',itp_support:true});
+    paintSync();
+  };
+  function onGoogleCredential(resp){
+    syncNote('Signing in…');
+    fetch(SYNC_URL+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})})
+      .then(function(r){ if(!r.ok) throw new Error('Sign-in was not accepted ('+r.status+').'); return r.json(); })
+      .then(function(data){ setSession({token:data.token,name:data.name,email:data.email}); syncNote(''); sync(); })
+      .catch(function(e){ syncNote((e&&e.message)||'Could not reach the sync server.'); });
+  }
+  function queueSync(){ if(!SYNC_URL||!session) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync,1500); }
   function sync(){
-    if(!SYNC_URL||!syncToken||syncBusy) return;
+    if(!SYNC_URL||!session||syncBusy) return;
     if(!navigator.onLine){ syncNote('Offline. Will sync when back online.'); return; }
     syncBusy=true; syncNote('Syncing…');
     var snapshot=JSON.stringify(log);
-    fetch(SYNC_URL+'/sync',{method:'POST',headers:{'Authorization':'Bearer '+syncToken,'Content-Type':'application/json'},body:JSON.stringify({days:log})})
-      .then(function(r){ if(r.status===401){ throw new Error('That sync code was not accepted.'); } if(!r.ok) throw new Error('Sync failed ('+r.status+').'); return r.json(); })
+    fetch(SYNC_URL+'/sync',{method:'POST',headers:{'Authorization':'Bearer '+session.token,'Content-Type':'application/json'},body:JSON.stringify({days:log})})
+      .then(function(r){
+        if(r.status===401){ setSession(null); throw new Error('Your sign-in expired. Sign in again to keep syncing.'); }
+        if(!r.ok) throw new Error('Sync failed ('+r.status+').'); return r.json();
+      })
       .then(function(data){
         var merged=data.days||{};
         // Keep anything changed while the request was in flight.
@@ -520,27 +537,12 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
       .catch(function(e){ syncNote((e&&e.message)||'Could not reach the sync server. Will retry.'); })
       .then(function(){ syncBusy=false; });
   }
-  $('syncOn').addEventListener('click',function(){
-    syncToken=newToken();
-    try{ localStorage.setItem(SYNC,syncToken); }catch(e){}
-    paintSync(); $('syncIo').value=syncToken; syncNote('Sync is on. Copy this code into the app on your other devices.'); sync();
-  });
-  $('syncJoin').addEventListener('click',function(){
-    var v=$('syncIo').value.trim();
-    if(!/^[A-Za-z0-9_-]{40,128}$/.test(v)){ syncNote('Paste a sync code first.'); return; }
-    syncToken=v; try{ localStorage.setItem(SYNC,syncToken); }catch(e){}
-    paintSync(); syncNote('Joining…'); sync();
-  });
-  $('syncShow').addEventListener('click',function(){
-    $('syncIo').value=syncToken;
-    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(syncToken).then(function(){ syncNote('Code copied. Paste it into the app on your other device.'); },function(){ syncNote('Select the code and copy it by hand.'); }); }
-    else syncNote('Select the code and copy it by hand.');
-  });
   $('syncNow').addEventListener('click',sync);
-  $('syncStop').addEventListener('click',function(){
-    if(!confirm('Turn off sync on this device? Your days stay here and on the server; only the link is removed.')) return;
-    syncToken=''; try{ localStorage.removeItem(SYNC); }catch(e){}
-    $('syncIo').value=''; paintSync(); syncNote('Sync is off.');
+  $('signOut').addEventListener('click',function(){
+    if(!confirm('Sign out on this device? Your days stay here and in your account.')) return;
+    var tok=session&&session.token; setSession(null); syncNote('Signed out.');
+    if(tok) fetch(SYNC_URL+'/auth/logout',{method:'POST',headers:{'Authorization':'Bearer '+tok}}).catch(function(){});
+    if(window.google&&google.accounts) google.accounts.id.disableAutoSelect();
   });
   window.addEventListener('online',sync);
 
