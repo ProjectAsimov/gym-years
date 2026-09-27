@@ -1,6 +1,6 @@
 import { IconButton } from '../components/Button';
 import { MonthCalendar } from '../components/MonthCalendar';
-import { entries, taskById, toggleDay } from '../model/store';
+import { entries, setDay, taskById, toggleDay } from '../model/store';
 import { onDays } from '../lib/stats';
 import { taskVars } from '../lib/theme';
 import { back, replace } from '../lib/nav';
@@ -25,6 +25,11 @@ export function MonthScreen({ taskId, y, m }: { taskId: string; y: number; m: nu
         m={m}
         days={days}
         onToggle={(day) => toggleDay(taskId, day)}
+        onSetDays={(list, on) => {
+          const t = Date.now();
+          for (const day of list) if (days.has(day) !== on) setDay(taskId, day, on, t);
+          if (on && list.length && navigator.vibrate) navigator.vibrate(15);
+        }}
         onPrev={() => go(y, m - 1)}
         onNext={() => go(y, m + 1)}
       />

@@ -30,7 +30,9 @@ export function Heatmap({ year: y, days, onOpenMonth }: Props) {
     for (let m = 0; m < 12; m++) {
       const col = Math.floor((new Date(y, m, 1).getTime() - start.getTime()) / 86400000 / 7);
       if (col < w0 || col >= w1) continue;
-      const style = col - w0 > per - 3 ? { right: 0 } : { left: ((col - w0) / per) * 100 + '%' };
+      // Pills sit at their week column; the last one may overhang into the card padding
+      // rather than being pushed onto its neighbour.
+      const style = { left: `min(${((col - w0) / per) * 100}%, calc(100% - 21px))` };
       labels.push(
         <button
           type="button"

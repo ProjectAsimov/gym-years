@@ -88,7 +88,7 @@ export function TaskScreen({ taskId }: { taskId: string }) {
         <IconButton icon="dots" label="More" onClick={() => openSheet('menu')} />
       </header>
 
-      <button ref={btn} type="button" class={'today' + (done ? ' done' : '')} onClick={onToday} aria-pressed={done}>
+      <button ref={btn} type="button" class={'today rip' + (done ? ' done' : '')} onClick={onToday} aria-pressed={done}>
         {done ? <>Done today &#10003;<small>{st.streak > 1 ? `Day ${st.streak} in a row. ` : ''}Tap to undo</small></>
               : <>Mark today<small>{st.streak > 0 ? `Keep your ${st.streak}-day streak going` : 'Tap once to light up today'}</small></>}
       </button>

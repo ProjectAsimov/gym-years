@@ -20,7 +20,7 @@ export function ListRow({ task, streak, strip, doneToday, onOpen, onToggleToday 
     <div class="lrow" style={taskVars(task.color)}>
       <button
         type="button"
-        class="lrow-main"
+        class="lrow-main rip"
         onClick={onOpen}
         aria-label={`${task.name}, ${streakText}${grouped ? ', shared with a group' : ''}. Open`}
       >
@@ -38,7 +38,7 @@ export function ListRow({ task, streak, strip, doneToday, onOpen, onToggleToday 
       </button>
       <button
         type="button"
-        class={'lrow-today' + (doneToday ? ' done' : '')}
+        class={'lrow-today rip' + (doneToday ? ' done' : '')}
         aria-pressed={doneToday}
         aria-label={doneToday ? `${task.name}: done today. Tap to undo` : `${task.name}: mark today`}
         onClick={onToggleToday}

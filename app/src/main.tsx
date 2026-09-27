@@ -9,6 +9,7 @@ import { session, syncOn, statusNote, welcomed, finishSignIn, reloadSessionPrefs
 import { startSync, sync } from './model/sync';
 import { startTheme, reloadThemePrefs } from './lib/theme';
 import { startNav, openSheet } from './lib/nav';
+import { startRipple } from './lib/ripple';
 import { MOCK, setApi } from './model/api';
 import { captureJoinHash, checkPendingJoin, startGroups } from './model/groups';
 
@@ -24,6 +25,7 @@ async function boot(): Promise<void> {
   store.load();
   startTheme();
   startNav();
+  startRipple();
   startGroups();
 
   // The status line reflects account state unless an event (sync, sign-in) says otherwise.

@@ -1,4 +1,4 @@
-import { screens, sheet, top } from './lib/nav';
+import { navDir, screens, sheet, top } from './lib/nav';
 import { Home } from './screens/Home';
 import { TaskScreen } from './screens/Task';
 import { MonthScreen } from './screens/Month';
@@ -12,11 +12,15 @@ export function App() {
   void screens.value; // subscribe
   const cur = top();
   const editingId = cur.name === 'home' ? undefined : cur.taskId;
+  // Keyed by depth + screen identity (not month/year) so moving between months doesn't re-slide.
+  const animKey = screens.value.length + ':' + cur.name + ':' + (cur.name === 'home' ? '' : cur.taskId);
   return (
     <>
-      {cur.name === 'home' && <Home />}
-      {cur.name === 'task' && <TaskScreen key={cur.taskId} taskId={cur.taskId} />}
-      {cur.name === 'month' && <MonthScreen taskId={cur.taskId} y={cur.y} m={cur.m} />}
+      <div class="screen-anim" key={animKey} data-dir={navDir.value ?? undefined}>
+        {cur.name === 'home' && <Home />}
+        {cur.name === 'task' && <TaskScreen key={cur.taskId} taskId={cur.taskId} />}
+        {cur.name === 'month' && <MonthScreen taskId={cur.taskId} y={cur.y} m={cur.m} />}
+      </div>
       <Settings open={sheet.value === 'settings'} />
       <Welcome open={sheet.value === 'welcome'} />
       <TaskForm open={sheet.value === 'add'} />

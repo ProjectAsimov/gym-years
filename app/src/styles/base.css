@@ -5,7 +5,29 @@ body {
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+  /* No long-press selection menus; typing and copy areas opt back in below. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
+input, textarea, .share-link { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
+
+/* Press feedback: a gentle fade on every button except the ripple targets. */
+button { transition: opacity 0.2s ease, transform 0.12s ease; }
+button:not(.rip):not(:disabled):active { opacity: 0.6; }
+.rip { position: relative; overflow: hidden; }
+.ripple {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: currentColor; opacity: 0.22; transform: scale(0);
+  animation: ripple 0.35s ease-out forwards;
+}
+@keyframes ripple { to { transform: scale(1); opacity: 0; } }
+
+/* Screen changes slide in: forward from the right, back from the left. */
+.screen-anim[data-dir="fwd"] { animation: slide-fwd 0.25s ease-out; }
+.screen-anim[data-dir="back"] { animation: slide-back 0.25s ease-out; }
+@keyframes slide-fwd { from { transform: translateX(28px); opacity: 0; } }
+@keyframes slide-back { from { transform: translateX(-28px); opacity: 0; } }
 #app {
   padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(40px + env(safe-area-inset-bottom, 0px));
   max-width: 560px;

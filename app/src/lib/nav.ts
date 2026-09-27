@@ -13,12 +13,15 @@ interface NavState { screens: Screen[]; sheet: Sheet }
 
 export const screens = signal<Screen[]>([{ name: 'home' }]);
 export const sheet = signal<Sheet>(null);
+/** Which way the last screen change went, for the slide animation. */
+export const navDir = signal<'fwd' | 'back' | null>(null);
 
 const scrollMemo = new Map<number, number>();
 
 function apply(st: NavState | null): void {
   const s = st && Array.isArray(st.screens) && st.screens.length ? st.screens : [{ name: 'home' } as Screen];
   const depthBefore = screens.value.length;
+  navDir.value = s.length > depthBefore ? 'fwd' : s.length < depthBefore ? 'back' : navDir.value;
   screens.value = s;
   sheet.value = st?.sheet ?? null;
   if (s.length < depthBefore) {
