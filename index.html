@@ -140,9 +140,25 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div id="years"></div>
 <p class="home-hint">Tap the grid to open a month and edit past days.</p>
 
+<details class="tools" id="syncTools">
+  <summary>Sync across devices</summary>
+  <p id="syncHelp"></p>
+  <div class="row" id="syncOff">
+    <button class="b" id="syncOn">Turn on sync</button>
+    <button class="b" id="syncJoin">Use a code from another device</button>
+  </div>
+  <div class="row" id="syncOnRow" hidden>
+    <button class="b" id="syncShow">Show sync code</button>
+    <button class="b" id="syncNow">Sync now</button>
+    <button class="b warn" id="syncStop">Turn off sync</button>
+  </div>
+  <textarea id="syncIo" placeholder="Paste a sync code here to join, or tap &quot;Show sync code&quot;."></textarea>
+  <div class="note" id="syncNote"></div>
+</details>
+
 <details class="tools">
   <summary>Backup and restore</summary>
-  <p>Your days are stored only in this browser. Copy the text below somewhere safe now and then, and paste it back here if you get a new phone.</p>
+  <p>Your days are stored on this device. Copy the text below somewhere safe now and then, and paste it back here if you get a new phone.</p>
   <div class="row">
     <button class="b" id="export">Show backup text</button>
     <button class="b" id="copy">Copy to clipboard</button>
@@ -189,13 +205,35 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <script>
 (function(){
-  var KEY='gymyears.days.v1', THEME='gymyears.theme';
+  var KEY='gymyears.days.v1', LOG='gymyears.log.v2', THEME='gymyears.theme', SYNC='gymyears.sync';
+  // Set this to the deployed worker URL (see worker/README.md). Empty disables sync.
+  var SYNC_URL='https://tasktracker-sync.projectasimov.workers.dev';
+  // log: every day ever touched, as {on:0|1, t:ms}. days is the derived set of on days.
+  var log={};
   var MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var days=new Set();
   var now=new Date(), viewY=now.getFullYear(), viewM=now.getMonth();
 
-  function load(){ try{ var raw=localStorage.getItem(KEY); if(raw){ JSON.parse(raw).forEach(function(d){days.add(d);}); } }catch(e){} }
-  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(Array.from(days).sort())); }catch(e){ note('Could not save. Storage may be blocked in this browser.'); } }
+  function rebuildDays(){ days.clear(); Object.keys(log).forEach(function(k){ if(log[k].on) days.add(k); }); }
+  function load(){
+    try{
+      var raw=localStorage.getItem(LOG);
+      if(raw){ log=JSON.parse(raw)||{}; }
+      else{ // First run after the update: carry the old list over with t=0 so any real edit outranks it.
+        var old=localStorage.getItem(KEY);
+        if(old) JSON.parse(old).forEach(function(d){ log[d]={on:1,t:0}; });
+        rebuildDays(); save();
+      }
+    }catch(e){ log={}; }
+    rebuildDays();
+  }
+  function save(){
+    try{
+      localStorage.setItem(LOG, JSON.stringify(log));
+      localStorage.setItem(KEY, JSON.stringify(Array.from(days).sort()));
+    }catch(e){ note('Could not save. Storage may be blocked in this browser.'); }
+  }
+  function setDay(k,on){ log[k]={on:on?1:0,t:Date.now()}; if(on) days.add(k); else days.delete(k); }
   function pad(n){return (n<10?'0':'')+n;}
   function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function todayIso(){return iso(new Date());}
@@ -313,9 +351,9 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
   function toggle(k){
     var on=!days.has(k);
-    if(on) days.add(k); else days.delete(k);
+    setDay(k,on);
     if(on&&navigator.vibrate) navigator.vibrate(15);
-    save(); render();
+    save(); render(); queueSync();
     return on;
   }
 
@@ -370,13 +408,14 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
     var v=document.getElementById('io').value.trim(); if(!v){note('Paste backup text first.');return;}
     try{
       var arr=JSON.parse(v); if(!Array.isArray(arr)) throw 0;
-      var added=0; arr.forEach(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d)&&!days.has(d)){days.add(d);added++;} });
-      save(); render(); note('Restored. '+added+' new days added.');
+      var added=0; arr.forEach(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d)&&!days.has(d)){setDay(d,true);added++;} });
+      save(); render(); queueSync(); note('Restored. '+added+' new days added.');
     }catch(e){ note('That text is not a valid backup.'); }
   });
   document.getElementById('clear').addEventListener('click',function(){
     if(!confirm('Erase every logged day? This cannot be undone.')) return;
-    days.clear(); save(); render(); note('Erased.');
+    Array.from(days).forEach(function(d){ setDay(d,false); });
+    save(); render(); queueSync(); note('Erased.');
   });
 
   // Theme: mode follows the phone unless the user picks one; accent color is a choice from ACCENTS.
@@ -446,8 +485,67 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   if(window.matchMedia) window.matchMedia('(prefers-color-scheme: light)').addEventListener('change',paintTheme);
   paintTheme();
 
-  load(); render();
-  document.addEventListener('visibilitychange',function(){ if(!document.hidden) render(); });
+  // Sync: a random code identifies this user's data on the worker. The whole log is
+  // posted and the worker sends back the merged log (newest change per day wins).
+  var syncToken='', syncTimer=null, syncBusy=false, syncAt=0;
+  try{ syncToken=localStorage.getItem(SYNC)||''; }catch(e){}
+  var $=function(id){ return document.getElementById(id); };
+  function syncNote(t){ $('syncNote').textContent=t||''; }
+  function newToken(){
+    var b=new Uint8Array(32); crypto.getRandomValues(b);
+    return btoa(String.fromCharCode.apply(null,b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  function paintSync(){
+    var ready=!!SYNC_URL, on=ready&&!!syncToken;
+    $('syncOff').hidden=on||!ready; $('syncOnRow').hidden=!on;
+    $('syncHelp').textContent=!ready?'Sync is not set up in this build.'
+      :on?'This device syncs to your private copy on the sync server. Show the code and paste it into the app on another device to link them.'
+      :'Keep the same days on every device. Turning on sync creates a private code; anyone with the code can see your days, so share it only with your own devices.';
+  }
+  function queueSync(){ if(!SYNC_URL||!syncToken) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync,1500); }
+  function sync(){
+    if(!SYNC_URL||!syncToken||syncBusy) return;
+    if(!navigator.onLine){ syncNote('Offline. Will sync when back online.'); return; }
+    syncBusy=true; syncNote('Syncing…');
+    var snapshot=JSON.stringify(log);
+    fetch(SYNC_URL+'/sync',{method:'POST',headers:{'Authorization':'Bearer '+syncToken,'Content-Type':'application/json'},body:JSON.stringify({days:log})})
+      .then(function(r){ if(r.status===401){ throw new Error('That sync code was not accepted.'); } if(!r.ok) throw new Error('Sync failed ('+r.status+').'); return r.json(); })
+      .then(function(data){
+        var merged=data.days||{};
+        // Keep anything changed while the request was in flight.
+        if(JSON.stringify(log)!==snapshot){ Object.keys(log).forEach(function(k){ if(!merged[k]||log[k].t>merged[k].t) merged[k]=log[k]; }); }
+        log=merged; rebuildDays(); save(); render();
+        syncAt=Date.now(); syncNote('Synced just now. '+days.size+' days.');
+      })
+      .catch(function(e){ syncNote((e&&e.message)||'Could not reach the sync server. Will retry.'); })
+      .then(function(){ syncBusy=false; });
+  }
+  $('syncOn').addEventListener('click',function(){
+    syncToken=newToken();
+    try{ localStorage.setItem(SYNC,syncToken); }catch(e){}
+    paintSync(); $('syncIo').value=syncToken; syncNote('Sync is on. Copy this code into the app on your other devices.'); sync();
+  });
+  $('syncJoin').addEventListener('click',function(){
+    var v=$('syncIo').value.trim();
+    if(!/^[A-Za-z0-9_-]{40,128}$/.test(v)){ syncNote('Paste a sync code first.'); return; }
+    syncToken=v; try{ localStorage.setItem(SYNC,syncToken); }catch(e){}
+    paintSync(); syncNote('Joining…'); sync();
+  });
+  $('syncShow').addEventListener('click',function(){
+    $('syncIo').value=syncToken;
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(syncToken).then(function(){ syncNote('Code copied. Paste it into the app on your other device.'); },function(){ syncNote('Select the code and copy it by hand.'); }); }
+    else syncNote('Select the code and copy it by hand.');
+  });
+  $('syncNow').addEventListener('click',sync);
+  $('syncStop').addEventListener('click',function(){
+    if(!confirm('Turn off sync on this device? Your days stay here and on the server; only the link is removed.')) return;
+    syncToken=''; try{ localStorage.removeItem(SYNC); }catch(e){}
+    $('syncIo').value=''; paintSync(); syncNote('Sync is off.');
+  });
+  window.addEventListener('online',sync);
+
+  load(); render(); paintSync(); sync();
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden){ render(); if(Date.now()-syncAt>30000) sync(); } });
 })();
 </script>
 <script>

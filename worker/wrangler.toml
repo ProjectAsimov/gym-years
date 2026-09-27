@@ -1,0 +1,12 @@
+name = "tasktracker-sync"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# Origins allowed to call the worker from a browser. Add localhost while developing.
+[vars]
+ALLOWED_ORIGINS = "https://projectasimov.github.io,http://localhost:8123"
+
+# Create the namespace once with `wrangler kv namespace create DAYS` and paste its id here.
+[[kv_namespaces]]
+binding = "DAYS"
+id = "656ff3bc34e8467d82f2c49e6209e34c"
