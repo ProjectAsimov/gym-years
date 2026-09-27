@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TaskTracker feature graphic</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Rendered at exactly 1024x500 for the Play Store listing. */
+html,body{margin:0;width:1024px;height:500px;overflow:hidden;background:#0c0a12;font-family:Inter,system-ui,sans-serif;color:#f2eef8}
+.wrap{position:relative;width:1024px;height:500px;display:flex;align-items:center;padding:0 72px;box-sizing:border-box}
+.glow{position:absolute;right:-120px;top:-160px;width:620px;height:620px;border-radius:50%;background:radial-gradient(circle,rgba(168,85,247,.35),rgba(168,85,247,0) 65%)}
+.text{position:relative;z-index:1;max-width:520px}
+h1{font-size:64px;font-weight:700;letter-spacing:-.03em;margin:0 0 14px;line-height:1}
+p{font-size:24px;color:#b3acc4;margin:0;line-height:1.4;font-weight:500}
+.grid{position:relative;z-index:1;margin-left:auto;display:grid;grid-template-columns:repeat(13,26px);grid-template-rows:repeat(7,26px);gap:6px;transform:rotate(-6deg)}
+.grid i{display:block;border-radius:6px;background:#25202f}
+.grid i.on{background:#a855f7;box-shadow:0 0 18px rgba(168,85,247,.45)}
+.grid i.t{background:#a855f7;box-shadow:0 0 0 3px #f2eef8,0 0 18px rgba(168,85,247,.6)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="glow"></div>
+  <div class="text">
+    <h1>TaskTracker</h1>
+    <p>One square per day for anything you want to do daily. Streaks, sync, and friends to keep you honest.</p>
+  </div>
+  <div class="grid" id="g"></div>
+</div>
+<script>
+// Deterministic pattern that reads as "a good month".
+var g=document.getElementById('g'), s=11, rnd=function(){return (s=(s*16807)%2147483647)/2147483647};
+for(var i=0;i<91;i++){var e=document.createElement('i'); var col=Math.floor(i/7); var on=rnd()<(0.45+col*0.03); if(on) e.className='on'; if(i===90) e.className='t'; g.appendChild(e);}
+</script>
+</body>
+</html>
