@@ -1,0 +1,24 @@
+{
+  "name": "tasktracker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:mock": "cross-env VITE_MOCK_API=1 vite --port 5173 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.0.4",
+    "preact": "^10.26.9"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.1",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^1.0.0"
+  }
+}

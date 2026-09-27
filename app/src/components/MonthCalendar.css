@@ -1,0 +1,13 @@
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-head h2 { font-size: 18px; font-weight: 700; margin: 0; }
+.cal-head h2 span { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.cal-nav { display: flex; gap: 6px; }
+.wk, .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.wk { font-size: 11px; color: var(--muted); text-align: center; margin-bottom: 6px; }
+.c { aspect-ratio: 1 / 1; border: 0; border-radius: 10px; background: var(--cell); color: var(--muted); font-size: 14px; font-weight: 500; padding: 0; cursor: pointer; transition: background 0.15s, color 0.15s, transform 0.1s; }
+.c:active { transform: scale(0.92); }
+.c.on { background: var(--lit); color: var(--btn-text); font-weight: 700; }
+.c.today-cell { box-shadow: 0 0 0 2px var(--text); }
+.c.future { background: transparent; box-shadow: inset 0 0 0 1px var(--cell); opacity: 0.55; cursor: default; }
+.c.blank { visibility: hidden; }
+.c:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }

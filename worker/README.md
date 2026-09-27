@@ -1,11 +1,12 @@
 # Sync worker
 
-A Cloudflare Worker plus one KV namespace. Sign-in is a redirect round trip:
+A Cloudflare Worker with a D1 database (users, tasks, entries) and a KV
+namespace (sessions, OAuth state). Sign-in is a redirect round trip:
 the app sends the browser to `/auth/start`, the worker sends it to Google,
 Google returns to `/auth/callback`, and the worker exchanges the code for an
 ID token, verifies it, issues its own 90-day session token, and redirects back
-to the app with the token in the URL fragment. Days are stored under the
-Google account id.
+to the app with the token in the URL fragment. Tasks and entries are stored
+under the Google account id. See `../docs/ARCHITECTURE.md` for the contract.
 
 ## Setup
 
@@ -19,10 +20,12 @@ Google account id.
 cd worker
 npx wrangler login
 npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler d1 execute tasktracker --remote --file src/db/schema.sql
 npx wrangler deploy
 ```
 
-`npx wrangler dev` runs it locally on http://localhost:8787 with a local KV.
+`npm run dev` runs it locally on http://localhost:8787 with a local KV and D1
+(apply the schema with `--local` first). `npm run typecheck` runs tsc.
 
 ## API
 
@@ -33,6 +36,5 @@ All bodies and responses are JSON. Session routes take `Authorization: Bearer <s
 | `GET /auth/start?return=<app url>` | – | 302 to Google; `return` must be on an allowed origin |
 | `GET /auth/callback` | – | 302 back to the app with `#session=<token>`, or `#auth=failed` / `#auth=cancelled` |
 | `POST /auth/logout` | – | `{ ok: true }` and deletes the session |
-| `GET /me` | – | `{ name, email }` |
-| `GET /sync` | – | `{ days }` |
-| `POST /sync` | `{ "days": { "YYYY-MM-DD": { "on": 1, "t": <ms> } } }` | merged `{ days }` (newest `t` per day wins) |
+| `GET /me` | – | `{ id, name, email }` |
+| `POST /sync` | `{ tasks: Task[], entries: Entry[] }` — local changes since the last sync | `{ tasks, entries, now }` — full state after merging (tasks: newest `updated` wins; entries: newest `t` wins) |

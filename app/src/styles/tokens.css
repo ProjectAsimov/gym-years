@@ -1,0 +1,44 @@
+/* Theme tokens. Mode is auto / light / dark; the accent shade is painted onto
+   --lit / --btn / --lit-soft by lib/theme.ts. Per-task colors use --task* set
+   inline on the screen root. */
+:root {
+  --bg: #0c0a12;
+  --panel: #15121d;
+  --text: #f2eef8;
+  --muted: #8a839a;
+  --cell: #25202f;
+  --lit: #a855f7;
+  --lit-soft: rgba(168, 85, 247, 0.28);
+  --btn: #a855f7;
+  --btn-text: #0c0a12;
+  --danger: #e26d6d;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6f3fb;
+    --panel: #ffffff;
+    --text: #1b1626;
+    --muted: #6c6580;
+    --cell: #e3ddee;
+    --lit: #8b3fe0;
+    --lit-soft: rgba(139, 63, 224, 0.2);
+    --btn: #8b3fe0;
+    --btn-text: #ffffff;
+    --danger: #c24848;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f6f3fb;
+  --panel: #ffffff;
+  --text: #1b1626;
+  --muted: #6c6580;
+  --cell: #e3ddee;
+  --lit: #8b3fe0;
+  --lit-soft: rgba(139, 63, 224, 0.2);
+  --btn: #8b3fe0;
+  --btn-text: #ffffff;
+  --danger: #c24848;
+  color-scheme: light;
+}

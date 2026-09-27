@@ -1,13 +1,20 @@
 name = "tasktracker-sync"
-main = "src/index.js"
+main = "src/index.ts"
 compatibility_date = "2026-09-01"
 
 [vars]
 # Origins allowed to call the worker from a browser. Add localhost while developing.
 ALLOWED_ORIGINS = "https://projectasimov.github.io,http://localhost:8123"
-# Google OAuth web client id (public). Must match the one in index.html.
+# Google OAuth web client id (public). Must match the one in the app.
 GOOGLE_CLIENT_ID = "712676467852-6giqqf5fg2viqsue21kad9jcbhg2st5m.apps.googleusercontent.com"
 
+# Sessions, OAuth state and legacy single-tracker records.
 [[kv_namespaces]]
 binding = "DAYS"
 id = "656ff3bc34e8467d82f2c49e6209e34c"
+
+# Users, tasks, entries (and phase-2 groups/memberships).
+[[d1_databases]]
+binding = "DB"
+database_name = "tasktracker"
+database_id = "ba35f393-3992-42f3-b198-95619871c7a0"

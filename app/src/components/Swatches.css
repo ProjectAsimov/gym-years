@@ -1,0 +1,4 @@
+.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; justify-items: center; }
+.sw { width: 48px; height: 48px; border-radius: 50%; border: 0; cursor: pointer; box-shadow: 0 0 0 3px var(--panel); padding: 0; }
+.sw[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--text); }
+.sw:focus-visible { outline: 2px solid var(--text); outline-offset: 6px; }

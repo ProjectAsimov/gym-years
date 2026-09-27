@@ -1,0 +1,13 @@
+dialog { border: 0; padding: 0; background: transparent; color: var(--text); max-width: 560px; width: 100%; margin: auto auto 0; max-height: calc(100vh - 24px); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+dialog.center { margin: auto; padding: 16px; }
+.sheet { background: var(--panel); border: 1px solid var(--cell); border-bottom: 0; border-radius: 22px 22px 0 0; padding: 18px 18px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.sheet-head h2 { font-size: 18px; margin: 0; }
+.sheet.welcome { border: 1px solid var(--cell); border-radius: 22px; padding: 28px 22px 18px; text-align: center; }
+.sheet.welcome img { border-radius: 14px; margin-bottom: 10px; }
+.sheet.welcome h2 { font-size: 22px; margin: 0 0 6px; }
+.sheet.welcome p { font-size: 14px; color: var(--muted); line-height: 1.5; margin: 0 0 12px; }
+.menu { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.menu button { text-align: left; font-size: 15px; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--cell); background: var(--bg); color: var(--text); cursor: pointer; }
+.menu button.warn { color: var(--danger); }

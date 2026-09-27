@@ -1,0 +1,68 @@
+import type { Entry, Task } from '../types';
+
+interface TaskRow {
+  id: string; owner_id: string; name: string; color: string; icon: string;
+  archived: number; group_id: string | null; created: number; updated: number; deleted: number;
+}
+interface EntryRow { task_id: string; day: string; on_: number; t: number }
+
+const taskFromRow = (r: TaskRow): Task => ({
+  id: r.id, ownerId: r.owner_id, name: r.name, color: r.color, icon: r.icon,
+  archived: r.archived ? 1 : 0, groupId: r.group_id, created: r.created, updated: r.updated,
+  deleted: r.deleted ? 1 : 0,
+});
+const entryFromRow = (r: EntryRow): Entry => ({ taskId: r.task_id, day: r.day, on: r.on_ ? 1 : 0, t: r.t });
+
+export function upsertUser(db: D1Database, id: string, name: string, email: string): D1PreparedStatement {
+  return db
+    .prepare('INSERT INTO users (id, name, email, created) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET name = ?2, email = ?3')
+    .bind(id, name, email, Date.now());
+}
+
+export async function tasksForOwner(db: D1Database, ownerId: string): Promise<Task[]> {
+  const { results } = await db.prepare('SELECT * FROM tasks WHERE owner_id = ?').bind(ownerId).all<TaskRow>();
+  return results.map(taskFromRow);
+}
+
+export async function entriesForOwner(db: D1Database, ownerId: string): Promise<Entry[]> {
+  const { results } = await db
+    .prepare('SELECT e.task_id, e.day, e.on_, e.t FROM entries e JOIN tasks t ON t.id = e.task_id WHERE t.owner_id = ?')
+    .bind(ownerId)
+    .all<EntryRow>();
+  return results.map(entryFromRow);
+}
+
+/** Which of these task ids already exist (under any owner). Chunked: D1 caps bound parameters per statement. */
+export async function existingTaskIds(db: D1Database, ids: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const sql = `SELECT id FROM tasks WHERE id IN (${chunk.map(() => '?').join(',')})`;
+    const { results } = await db.prepare(sql).bind(...chunk).all<{ id: string }>();
+    for (const r of results) found.add(r.id);
+  }
+  return found;
+}
+
+// The WHERE guards repeat the merge rule in SQL so a sync racing another
+// device's write cannot roll a newer row back to an older one.
+export function upsertTask(db: D1Database, t: Task): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO tasks (id, owner_id, name, color, icon, archived, group_id, created, updated, deleted)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+       ON CONFLICT(id) DO UPDATE SET
+         name = ?3, color = ?4, icon = ?5, archived = ?6, group_id = ?7, created = ?8, updated = ?9, deleted = ?10
+       WHERE tasks.owner_id = ?2 AND ?9 > tasks.updated`,
+    )
+    .bind(t.id, t.ownerId, t.name, t.color, t.icon, t.archived, t.groupId, t.created, t.updated, t.deleted);
+}
+
+export function upsertEntry(db: D1Database, e: Entry): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO entries (task_id, day, on_, t) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(task_id, day) DO UPDATE SET on_ = ?3, t = ?4 WHERE ?4 > entries.t`,
+    )
+    .bind(e.taskId, e.day, e.on, e.t);
+}

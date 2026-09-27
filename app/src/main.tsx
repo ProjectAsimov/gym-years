@@ -1,0 +1,52 @@
+import { render } from 'preact';
+import { effect } from '@preact/signals';
+import './styles/tokens.css';
+import './styles/base.css';
+import { App } from './app';
+import { migrateLegacy } from './model/migrate';
+import * as store from './model/store';
+import { session, syncOn, statusNote, welcomed, finishSignIn, reloadSessionPrefs } from './model/session';
+import { startSync, sync } from './model/sync';
+import { startTheme, reloadThemePrefs } from './lib/theme';
+import { startNav, openSheet } from './lib/nav';
+import { MOCK, setApi } from './model/api';
+
+async function boot(): Promise<void> {
+  if (MOCK) {
+    setApi((await import('./dev/mockApi')).mockApi);
+    (await import('./dev/seed')).applySeedParams();
+  }
+  migrateLegacy();
+  reloadSessionPrefs();
+  reloadThemePrefs();
+  store.load();
+  startTheme();
+  startNav();
+
+  // The status line reflects account state unless an event (sync, sign-in) says otherwise.
+  effect(() => {
+    if (!session.value) statusNote.value = 'Not signed in. Days are kept only on this device.';
+    else if (!syncOn.value) statusNote.value = 'Sync is off.';
+  });
+
+  render(<App />, document.getElementById('app')!);
+
+  startSync();
+  const signedInNow = await finishSignIn();
+  if (!signedInNow && session.value) void sync();
+  if (!session.value && !welcomed.value) openSheet('welcome');
+  if (MOCK) (await import('./dev/seed')).applyScreenParam();
+}
+
+void boot();
+
+// Service worker: reload once when a new version takes over, so updates show
+// up without clearing the app. Only in production builds (the SW is generated at build time).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded) { reloaded = true; location.reload(); }
+  });
+  navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(() => { /* offline or unsupported */ });
+}

@@ -1,0 +1,14 @@
+.year { margin-top: 14px; }
+.year-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 12px; }
+.year-head h2 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+.year-head span { font-size: 13px; color: var(--muted); }
+.hm { position: relative; height: 16px; margin-bottom: 4px; }
+.hm button { position: absolute; top: 0; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11px; cursor: pointer; font-family: inherit; }
+.hm button:disabled { cursor: default; opacity: 0.6; }
+.hg { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, auto); gap: 3px; margin-bottom: 12px; cursor: pointer; }
+.hg:last-child { margin-bottom: 0; }
+.hg i { aspect-ratio: 1 / 1; border-radius: 3px; background: var(--cell); display: block; }
+.hg i.on { background: var(--lit); }
+.hg i.f { background: transparent; box-shadow: inset 0 0 0 1px var(--cell); }
+.hg i.x { visibility: hidden; }
+.hg i.t { box-shadow: 0 0 0 1.5px var(--text); }

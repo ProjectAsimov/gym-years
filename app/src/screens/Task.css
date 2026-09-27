@@ -1,0 +1,9 @@
+.task-title { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.task-title svg { color: var(--lit); flex: none; }
+.today { display: block; width: 100%; border: 0; border-radius: 20px; padding: 22px 16px; font-size: 20px; font-weight: 700; color: var(--btn-text); background: var(--btn); transition: transform 0.12s ease; cursor: pointer; }
+.today:active { transform: scale(0.98); }
+.today.done { background: var(--panel); color: var(--lit); box-shadow: 0 0 0 2px var(--lit), 0 0 28px var(--lit-soft); }
+.today small { display: block; font-size: 13px; font-weight: 500; opacity: 0.8; margin-top: 6px; }
+.today:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+.today.pop { animation: pop 0.35s ease; }
+@keyframes pop { 40% { transform: scale(1.03); } }
