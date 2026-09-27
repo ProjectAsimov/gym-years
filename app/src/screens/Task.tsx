@@ -1,19 +1,33 @@
-import { useRef } from 'preact/hooks';
-import { IconButton } from '../components/Button';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { IconButton, Button } from '../components/Button';
 import { StatTile, StatRow } from '../components/StatTile';
 import { Heatmap } from '../components/Heatmap';
+import { Leaderboard } from '../components/Leaderboard';
 import { Sheet } from '../components/Sheet';
 import { Icon } from '../components/Icon';
+import { toast } from '../components/Toast';
 import { entries, taskById, toggleDay, updateTask, deleteTask } from '../model/store';
 import { onDays, taskStats, yearsWithData } from '../lib/stats';
 import { todayIso, shortMonth } from '../lib/dates';
 import { taskVars } from '../lib/theme';
 import { back, push, openSheet, closeSheet, swapSheet, sheet, leaveTask } from '../lib/nav';
+import { lastSyncAt } from '../model/sync';
+import { board, boardError, loadBoard, clearBoard, shareTask, leaveCurrentGroup, removeGroupMember, inviteLink } from '../model/groups';
 import './Task.css';
 
 export function TaskScreen({ taskId }: { taskId: string }) {
   const task = taskById(taskId);
   const btn = useRef<HTMLButtonElement>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareCode, setShareCode] = useState<string | null>(null);
+  const [copyNote, setCopyNote] = useState('');
+
+  useEffect(() => {
+    if (task?.groupId) void loadBoard(task.groupId);
+    else clearBoard();
+    // Re-runs after the board's group id changes and after each sync completes.
+  }, [task?.groupId, lastSyncAt.value]);
+
   if (!task || task.deleted) {
     return (
       <div class="screen">
@@ -26,6 +40,7 @@ export function TaskScreen({ taskId }: { taskId: string }) {
   const days = onDays(entries.value[taskId]);
   const st = taskStats(days);
   const done = days.has(today);
+  const isHost = board.value?.members.find((m) => m.isMe)?.isHost ?? false;
 
   const onToday = () => {
     const on = toggleDay(taskId, today);
@@ -33,6 +48,37 @@ export function TaskScreen({ taskId }: { taskId: string }) {
     if (on && b) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
   };
 
+  const onShare = async () => {
+    setShareBusy(true);
+    const res = await shareTask(taskId).catch(() => null);
+    setShareBusy(false);
+    if (!res) { toast('Could not create the group. Try again.'); return; }
+    setCopyNote('');
+    setShareCode(res.group.inviteCode);
+    swapSheet('share');
+  };
+
+  const onInvite = () => {
+    const code = board.value?.group.inviteCode ?? null;
+    setCopyNote('');
+    setShareCode(code);
+    openSheet('share');
+  };
+
+  const onLeave = async () => {
+    if (!task.groupId) return;
+    if (!confirm(`Leave "${board.value?.group.name ?? task.name}"? You'll keep your own days.`)) return;
+    await leaveCurrentGroup(task.groupId);
+  };
+
+  const onRemove = async (userId: string, name: string) => {
+    if (!task.groupId) return;
+    if (!confirm(`Remove ${name} from the group?`)) return;
+    await removeGroupMember(task.groupId, userId);
+  };
+
+  const link = shareCode ? inviteLink(shareCode) : '';
+  const canShareNative = typeof navigator !== 'undefined' && !!navigator.share;
 
   return (
     <div class="screen task" style={taskVars(task.color)}>
@@ -53,6 +99,18 @@ export function TaskScreen({ taskId }: { taskId: string }) {
         <StatTile value={st.thisYear} label={`in ${st.year}`} sub={`${st.total} all time`} />
       </StatRow>
 
+      {task.groupId && board.value && (
+        <Leaderboard
+          group={board.value.group}
+          members={board.value.members}
+          isHost={isHost}
+          onInvite={onInvite}
+          onLeave={onLeave}
+          onManage={() => openSheet('members')}
+        />
+      )}
+      {task.groupId && !board.value && boardError.value && <p class="hint">Couldn't load leaderboard.</p>}
+
       {yearsWithData(days).map((y) => (
         <Heatmap key={y} year={y} days={days} onOpenMonth={(yy, m) => push({ name: 'month', taskId, y: yy, m })} />
       ))}
@@ -60,6 +118,9 @@ export function TaskScreen({ taskId }: { taskId: string }) {
 
       <Sheet open={sheet.value === 'menu'} onClose={closeSheet} title={task.name} labelledBy="menuTitle">
         <div class="menu">
+          {!task.groupId && (
+            <button type="button" onClick={onShare} disabled={shareBusy}>{shareBusy ? 'Creating group…' : 'Share'}</button>
+          )}
           <button type="button" onClick={() => swapSheet('edit')}>Rename</button>
           <button type="button" onClick={() => swapSheet('edit')}>Change color or icon</button>
           <button type="button" onClick={() => {
@@ -72,6 +133,46 @@ export function TaskScreen({ taskId }: { taskId: string }) {
             deleteTask(taskId);
             leaveTask(taskId);
           }}>Delete</button>
+        </div>
+      </Sheet>
+
+      <Sheet open={sheet.value === 'share'} onClose={closeSheet} title="Invite" labelledBy="shareTitle">
+        <p class="acct">Anyone with this link can join and get their own "{task.name}" to track, right beside yours on the leaderboard.</p>
+        <p class="field share-link">{link || 'Creating link…'}</p>
+        <div class="row">
+          <Button
+            onClick={() => {
+              if (!link) return;
+              if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(link).then(
+                  () => setCopyNote('Copied.'),
+                  () => setCopyNote('Copy failed. Select the text and copy it by hand.'),
+                );
+              } else setCopyNote('Clipboard unavailable. Select the text and copy it by hand.');
+            }}
+          >
+            Copy
+          </Button>
+          {canShareNative && (
+            <Button onClick={() => { if (link) void navigator.share({ title: task.name, url: link }).catch(() => { /* cancelled */ }); }}>
+              Share
+            </Button>
+          )}
+        </div>
+        <div class="note">{copyNote}</div>
+      </Sheet>
+
+      <Sheet open={sheet.value === 'members'} onClose={closeSheet} title="Members" labelledBy="membersTitle">
+        <div class="menu">
+          {board.value?.members.map((m) => (
+            <div class="member-row" key={m.userId}>
+              <span class="member-name">
+                {m.name}
+                {m.isHost && <span class="gtag">host</span>}
+              </span>
+              {!m.isHost && <Button warn onClick={() => onRemove(m.userId, m.name)}>Remove</Button>}
+            </div>
+          ))}
         </div>
       </Sheet>
     </div>

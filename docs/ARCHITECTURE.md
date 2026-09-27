@@ -88,3 +88,56 @@ CSS custom properties on `:root` (`--bg`, `--panel`, `--text`, `--muted`,
 `--cell`, `--lit`, `--lit-soft`, `--btn`, `--btn-text`, `--danger`). Mode is
 auto / light / dark; the accent is one of the eight palette ids, each with a
 dark-mode and a light-mode shade. Per-task color uses the same palette.
+
+## Phase 2: groups and leaderboard
+
+A task can be **shared**. Sharing creates a group named after the task and an
+invite link. Anyone who opens the link and signs in **joins** the group and gets
+their own task (same name, color, icon) linked to it; each member marks their
+own days. Every member sees a **leaderboard** for the group. The host can remove
+members; a member can leave. `memberLimit` is 50 and is enforced on join.
+
+Server owns `Task.groupId`: `/sync` ignores any incoming `groupId` and keeps the
+stored value. When a grouped task arrives through `/sync` with `deleted: 1`, the
+server also deletes that user's membership (deleting the task leaves the group).
+Archived tasks stay in the group.
+
+### Routes (session required unless noted)
+
+| Route | Body / query | Returns |
+|---|---|---|
+| `POST /groups` | `{ taskId }` — caller's own, non-deleted, ungrouped task | `{ group, task }` — task now has `groupId`; the caller becomes host and first member |
+| `GET /groups/preview?code=<inviteCode>` | no session needed | `{ name, hostName, members, memberLimit }` or 404 |
+| `POST /groups/join` | `{ code }` | `{ group, task }` — the caller's new task (or their existing one if already a member); 409 `group full` at the limit |
+| `GET /groups/:id/board?today=YYYY-MM-DD` | member only | `{ group, members: Member[] }` |
+| `POST /groups/:id/leave` | member (not host) | `{ ok }` — membership removed; the task stays with `groupId` cleared |
+| `POST /groups/:id/remove` | `{ userId }`, host only | `{ ok }` — same as leave for that member |
+
+Shapes:
+
+```ts
+Group  = { id, name, hostId, inviteCode, memberLimit, members: number, created }
+Member = { userId, name, isHost, isMe, streak, month, total, lastDay: string | null }
+```
+
+`today` comes from the client (its local date) so streaks and month counts match
+what the member sees. Board stats per member, over that member's task entries
+with `on = 1`: `streak` = consecutive days ending on `today` or the day before;
+`month` = days in `today`'s month; `total` = all days. Members whose task is
+deleted are excluded. Sort by streak desc, then month desc, then total desc,
+then name. Invite codes are 10 chars from `[a-z0-9]`, generated server-side.
+
+### App
+
+- Invite link: `https://projectasimov.github.io/tasktracker/#join=<code>`.
+  On load, `#join=` is stored in `localStorage['tt.pendingJoin']` and removed
+  from the URL. If signed out, the Welcome dialog says the sign-in is to join;
+  once a session exists the Join sheet shows the preview (name, host, N of 50)
+  with Join / Not now. Joining syncs and opens the new task.
+- Task screen: "Share" in the … menu when ungrouped → creates the group → Share
+  sheet with the link, Copy, and the native share button when `navigator.share`
+  exists. When grouped, a **Group** card below the stats shows the leaderboard
+  (me highlighted; host marked), "N of 50 members", Invite (re-opens the Share
+  sheet), Leave (member) or Manage members (host: list with Remove; confirm
+  each). The board refreshes when the screen opens and after each sync.
+- Home rows show a small group badge on grouped tasks.

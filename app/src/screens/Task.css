@@ -7,3 +7,7 @@
 .today:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
 .today.pop { animation: pop 0.35s ease; }
 @keyframes pop { 40% { transform: scale(1.03); } }
+
+.share-link { word-break: break-all; user-select: text; font-size: 13px; }
+.member-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--cell); background: var(--bg); }
+.member-name { display: flex; align-items: center; gap: 6px; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -38,3 +38,9 @@ All bodies and responses are JSON. Session routes take `Authorization: Bearer <s
 | `POST /auth/logout` | – | `{ ok: true }` and deletes the session |
 | `GET /me` | – | `{ id, name, email }` |
 | `POST /sync` | `{ tasks: Task[], entries: Entry[] }` — local changes since the last sync | `{ tasks, entries, now }` — full state after merging (tasks: newest `updated` wins; entries: newest `t` wins) |
+| `POST /groups` | `{ taskId }` — caller's own, non-deleted, ungrouped task | `{ group, task }` — task now has `groupId`; caller becomes host and first member |
+| `GET /groups/preview?code=<inviteCode>` | – (no session needed) | `{ name, hostName, members, memberLimit }` or 404 |
+| `POST /groups/join` | `{ code }` | `{ group, task }` — caller's new task, or their existing one if already a member; 409 `group full` at the limit |
+| `GET /groups/:id/board?today=YYYY-MM-DD` | – (member only) | `{ group, members: Member[] }` |
+| `POST /groups/:id/leave` | – (member, not host) | `{ ok: true }` — membership removed, task's `groupId` cleared |
+| `POST /groups/:id/remove` | `{ userId }` (host only) | `{ ok: true }` — same as leave, for that member |

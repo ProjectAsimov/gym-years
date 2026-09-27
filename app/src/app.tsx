@@ -5,6 +5,7 @@ import { MonthScreen } from './screens/Month';
 import { Settings } from './screens/Settings';
 import { Welcome } from './screens/Welcome';
 import { TaskForm } from './screens/TaskForm';
+import { Join } from './screens/Join';
 import { Toast } from './components/Toast';
 
 export function App() {
@@ -20,6 +21,7 @@ export function App() {
       <Welcome open={sheet.value === 'welcome'} />
       <TaskForm open={sheet.value === 'add'} />
       <TaskForm open={sheet.value === 'edit'} taskId={editingId} />
+      <Join open={sheet.value === 'join'} />
       <Toast />
     </>
   );

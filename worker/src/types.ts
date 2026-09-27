@@ -34,6 +34,34 @@ export interface Entry {
   t: number;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+  hostId: string;
+  inviteCode: string;
+  memberLimit: number;
+  members: number;
+  created: number;
+}
+
+export interface Membership {
+  groupId: string;
+  userId: string;
+  taskId: string;
+  joined: number;
+}
+
+export interface Member {
+  userId: string;
+  name: string;
+  isHost: boolean;
+  isMe: boolean;
+  streak: number;
+  month: number;
+  total: number;
+  lastDay: string | null;
+}
+
 export interface Ctx {
   req: Request;
   env: Env;

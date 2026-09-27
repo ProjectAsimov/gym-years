@@ -15,12 +15,21 @@ interface Props {
 
 export function ListRow({ task, streak, strip, doneToday, onOpen, onToggleToday }: Props) {
   const streakText = streak === 1 ? '1 day streak' : `${streak} day streak`;
+  const grouped = !!task.groupId;
   return (
     <div class="lrow" style={taskVars(task.color)}>
-      <button type="button" class="lrow-main" onClick={onOpen} aria-label={`${task.name}, ${streakText}. Open`}>
+      <button
+        type="button"
+        class="lrow-main"
+        onClick={onOpen}
+        aria-label={`${task.name}, ${streakText}${grouped ? ', shared with a group' : ''}. Open`}
+      >
         <span class="lrow-icon"><Icon name={task.icon} size={20} /></span>
         <span class="lrow-text">
-          <span class="lrow-name">{task.name}</span>
+          <span class="lrow-name">
+            {task.name}
+            {grouped && <Icon name="users" size={13} class="lrow-group" />}
+          </span>
           <span class="lrow-sub">{streakText}</span>
           <span class="lrow-strip" aria-hidden="true">
             {strip.map((on, i) => <i key={i} class={on ? 'on' : i === strip.length - 1 ? 't' : undefined} />)}

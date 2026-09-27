@@ -1,4 +1,4 @@
-import { entriesForOwner, existingTaskIds, tasksForOwner, upsertEntry, upsertTask, upsertUser } from '../db/queries';
+import { deleteMembershipStmt, entriesForOwner, existingTaskIds, tasksForOwner, upsertEntry, upsertTask, upsertUser } from '../db/queries';
 import { HttpError, json, readJson } from '../lib/json';
 import { MAX_ENTRIES, MAX_TASKS, validateSyncBody } from '../lib/validate';
 import { requireSession } from '../middleware/auth';
@@ -43,9 +43,13 @@ export async function sync(ctx: Ctx): Promise<Response> {
     if (foreign.has(incoming.id)) continue;
     const cur = tasks.get(incoming.id);
     if (cur && incoming.updated <= cur.updated) continue;
-    const task: Task = { ...incoming, ownerId: s.sub };
+    // Server owns groupId: a device cannot join, leave, or move a task into a group via /sync.
+    const groupId = cur ? cur.groupId : null;
+    const task: Task = { ...incoming, ownerId: s.sub, groupId };
     tasks.set(task.id, task);
     writes.push(upsertTask(db, task));
+    // Soft-deleting a grouped task also leaves the group.
+    if (task.deleted && groupId) writes.push(deleteMembershipStmt(db, groupId, s.sub));
   }
 
   for (const incoming of body.entries) {

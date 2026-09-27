@@ -40,6 +40,7 @@ export interface Group {
   hostId: string;
   inviteCode: string;
   memberLimit: number;
+  members: number;
   created: number;
 }
 
@@ -48,6 +49,34 @@ export interface Membership {
   userId: string;
   taskId: string;
   joined: number;
+}
+
+export interface Member {
+  userId: string;
+  name: string;
+  isHost: boolean;
+  isMe: boolean;
+  streak: number;
+  month: number;
+  total: number;
+  lastDay: string | null;
+}
+
+export interface GroupPreview {
+  name: string;
+  hostName: string;
+  members: number;
+  memberLimit: number;
+}
+
+export interface GroupBoard {
+  group: Group;
+  members: Member[];
+}
+
+export interface GroupAndTask {
+  group: Group;
+  task: Task;
 }
 
 // API shapes.

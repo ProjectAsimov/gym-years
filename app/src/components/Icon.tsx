@@ -28,6 +28,7 @@ const UI_ICONS = {
   next: <path d="M9 18l6-6-6-6"/>,
   plus: <path d="M12 5v14M5 12h14"/>,
   dots: <><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></>,
+  users: <><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="8" r="2.5"/><path d="M15.5 14.2c2.6.4 4.5 2.6 4.5 5.3"/></>,
 };
 export type UiIconId = keyof typeof UI_ICONS;
 

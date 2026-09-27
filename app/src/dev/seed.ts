@@ -3,13 +3,23 @@
 //   ?fresh=1         clear all tt.* keys
 //   ?legacy=1        plant legacy gymyears.* keys to exercise the migration
 //   ?signedin=1      pre-set a mock session
+//   ?group=1         share the first seeded task into a group (needs a session; two-row leaderboard)
+//   ?join=<code>     stash a pending join as if `#join=<code>` had been visited (e.g. mockjoin01)
 //   ?screen=task|month|settings|welcome   open that screen after boot (for screenshots)
-import { STATE_KEY, addTask, setDay, tasks } from '../model/store';
+import { STATE_KEY, addTask, setDay, tasks, entries, upsertServerTask } from '../model/store';
 import { iso, addDays } from '../lib/dates';
-import { MOCK_TOKEN, seedServerGym } from './mockApi';
+import { MOCK_TOKEN, seedServerGym, mockApi, KNOWN_JOIN_CODE } from './mockApi';
+import { PENDING_JOIN_KEY } from '../model/groups';
 import { push, openSheet } from '../lib/nav';
 
+export { KNOWN_JOIN_CODE };
+
 function params(): URLSearchParams { return new URLSearchParams(location.search); }
+
+/** The first active task by creation order -- stable even after `upsertServerTask` reorders the raw list. */
+function earliestTask() {
+  return tasks.value.filter((t) => !t.deleted && !t.archived).sort((a, b) => a.created - b.created)[0];
+}
 
 function clearAll(): void {
   for (const k of Object.keys(localStorage)) if (k.startsWith('tt.') || k.startsWith('gymyears.')) localStorage.removeItem(k);
@@ -21,7 +31,7 @@ function rng(seed: number): () => number {
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
 
-export function applySeedParams(): void {
+export async function applySeedParams(): Promise<void> {
   const p = params();
   if (p.get('fresh') === '1') clearAll();
   if (p.get('legacy') === '1') {
@@ -58,13 +68,32 @@ export function applySeedParams(): void {
       if (s.seed === 2) setDay(t.id, iso(today), true);
     }
   }
+  if (p.get('group') === '1') {
+    if (!localStorage.getItem('tt.session')) {
+      localStorage.setItem('tt.session', JSON.stringify({ token: MOCK_TOKEN, name: 'Mock User', email: 'mock@example.com' }));
+    }
+    localStorage.setItem('tt.welcomed', '1');
+    const first = earliestTask();
+    if (first) {
+      // Push it to the mock server directly (the app's own sync() needs a
+      // session signal that hasn't been loaded yet at this point in boot),
+      // then share it into a group the same way the Task screen would.
+      const taskEntries = Object.values(entries.value[first.id] ?? {});
+      await mockApi.sync(MOCK_TOKEN, { tasks: [first], entries: taskEntries });
+      const res = await mockApi.createGroup(MOCK_TOKEN, first.id);
+      upsertServerTask(res.task);
+    }
+  }
+  if (p.get('join')) {
+    try { localStorage.setItem(PENDING_JOIN_KEY, p.get('join')!); } catch { /* storage blocked */ }
+  }
 }
 
 export function applyScreenParam(): void {
   const p = params();
   const screen = p.get('screen');
   if (!screen) return;
-  const first = tasks.value.find((t) => !t.deleted && !t.archived);
+  const first = earliestTask();
   const now = new Date();
   switch (screen) {
     case 'task': if (first) push({ name: 'task', taskId: first.id }); break;

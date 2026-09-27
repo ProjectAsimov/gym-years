@@ -5,7 +5,7 @@ export const MAX_TASKS = 200;
 export const MAX_ENTRIES = 20000;
 export const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-const ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const SHORT = /^[a-z0-9_-]{1,32}$/; // color / icon ids from the app palette and icon set
 
 export type IncomingTask = Omit<Task, 'ownerId'>;
@@ -61,8 +61,29 @@ function validateEntry(e: unknown, i: number): Entry {
   return { taskId: e.taskId, day: e.day, on: flag(e.on), t: e.t };
 }
 
-function isObject(v: unknown): v is Record<string, unknown> {
+export function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+export function validateTaskId(v: unknown): string {
+  if (typeof v !== 'string' || !ID.test(v)) throw new HttpError(400, 'taskId invalid');
+  return v;
+}
+
+export function validateUserId(v: unknown): string {
+  if (typeof v !== 'string' || !ID.test(v)) throw new HttpError(400, 'userId invalid');
+  return v;
+}
+
+/** Loose on purpose: an unrecognized code is a 404 from the group lookup, not a 400 here. */
+export function validateCode(v: unknown): string {
+  if (typeof v !== 'string' || v.length < 1 || v.length > 32) throw new HttpError(400, 'code invalid');
+  return v;
+}
+
+export function validateToday(v: unknown): string {
+  if (typeof v !== 'string' || !DAY.test(v)) throw new HttpError(400, 'today invalid');
+  return v;
 }
 
 function isMs(v: unknown): v is number {

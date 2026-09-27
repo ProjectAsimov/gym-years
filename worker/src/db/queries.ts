@@ -1,4 +1,4 @@
-import type { Entry, Task } from '../types';
+import type { Entry, Group, Membership, Task } from '../types';
 
 interface TaskRow {
   id: string; owner_id: string; name: string; color: string; icon: string;
@@ -65,4 +65,117 @@ export function upsertEntry(db: D1Database, e: Entry): D1PreparedStatement {
        ON CONFLICT(task_id, day) DO UPDATE SET on_ = ?3, t = ?4 WHERE ?4 > entries.t`,
     )
     .bind(e.taskId, e.day, e.on, e.t);
+}
+
+export async function taskById(db: D1Database, id: string): Promise<Task | null> {
+  const row = await db.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first<TaskRow>();
+  return row ? taskFromRow(row) : null;
+}
+
+// --- groups / memberships (phase 2) ---
+
+interface GroupRow {
+  id: string; name: string; host_id: string; invite_code: string; member_limit: number; created: number;
+}
+
+const groupFromRow = (r: GroupRow, members: number): Group => ({
+  id: r.id, name: r.name, hostId: r.host_id, inviteCode: r.invite_code, memberLimit: r.member_limit, members, created: r.created,
+});
+
+export async function insertGroup(db: D1Database, g: Omit<Group, 'members'>): Promise<void> {
+  await db
+    .prepare('INSERT INTO groups (id, name, host_id, invite_code, member_limit, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
+    .bind(g.id, g.name, g.hostId, g.inviteCode, g.memberLimit, g.created)
+    .run();
+}
+
+export async function groupById(db: D1Database, id: string): Promise<Group | null> {
+  const row = await db.prepare('SELECT * FROM groups WHERE id = ?').bind(id).first<GroupRow>();
+  return row ? groupFromRow(row, await memberCount(db, row.id)) : null;
+}
+
+export async function groupByCode(db: D1Database, code: string): Promise<Group | null> {
+  const row = await db.prepare('SELECT * FROM groups WHERE invite_code = ?').bind(code).first<GroupRow>();
+  return row ? groupFromRow(row, await memberCount(db, row.id)) : null;
+}
+
+export async function codeTaken(db: D1Database, code: string): Promise<boolean> {
+  const row = await db.prepare('SELECT 1 FROM groups WHERE invite_code = ?').bind(code).first();
+  return row != null;
+}
+
+export async function memberCount(db: D1Database, groupId: string): Promise<number> {
+  const row = await db.prepare('SELECT COUNT(*) AS n FROM memberships WHERE group_id = ?').bind(groupId).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+interface MembershipRow { group_id: string; user_id: string; task_id: string; joined: number }
+const membershipFromRow = (r: MembershipRow): Membership => (
+  { groupId: r.group_id, userId: r.user_id, taskId: r.task_id, joined: r.joined }
+);
+
+export function insertMembershipStmt(db: D1Database, m: Membership): D1PreparedStatement {
+  return db
+    .prepare('INSERT INTO memberships (group_id, user_id, task_id, joined) VALUES (?1, ?2, ?3, ?4)')
+    .bind(m.groupId, m.userId, m.taskId, m.joined);
+}
+
+export async function insertMembership(db: D1Database, m: Membership): Promise<void> {
+  await insertMembershipStmt(db, m).run();
+}
+
+export async function membership(db: D1Database, groupId: string, userId: string): Promise<Membership | null> {
+  const row = await db
+    .prepare('SELECT * FROM memberships WHERE group_id = ? AND user_id = ?')
+    .bind(groupId, userId)
+    .first<MembershipRow>();
+  return row ? membershipFromRow(row) : null;
+}
+
+export function deleteMembershipStmt(db: D1Database, groupId: string, userId: string): D1PreparedStatement {
+  return db.prepare('DELETE FROM memberships WHERE group_id = ? AND user_id = ?').bind(groupId, userId);
+}
+
+export function clearTaskGroupStmt(db: D1Database, taskId: string, updated: number): D1PreparedStatement {
+  return db.prepare('UPDATE tasks SET group_id = NULL, updated = ? WHERE id = ?').bind(updated, taskId);
+}
+
+export function setTaskGroupStmt(db: D1Database, taskId: string, groupId: string, updated: number): D1PreparedStatement {
+  return db.prepare('UPDATE tasks SET group_id = ?, updated = ? WHERE id = ?').bind(groupId, updated, taskId);
+}
+
+export async function userName(db: D1Database, id: string): Promise<string | null> {
+  const row = await db.prepare('SELECT name FROM users WHERE id = ?').bind(id).first<{ name: string }>();
+  return row?.name ?? null;
+}
+
+interface MemberTaskRow { user_id: string; name: string; task_id: string }
+
+/** Members whose task still exists and is not soft-deleted (a deleted task leaves the board). */
+export async function groupMemberTasks(db: D1Database, groupId: string): Promise<{ userId: string; name: string; taskId: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT m.user_id, u.name, m.task_id
+       FROM memberships m JOIN users u ON u.id = m.user_id JOIN tasks t ON t.id = m.task_id
+       WHERE m.group_id = ? AND t.deleted = 0`,
+    )
+    .bind(groupId)
+    .all<MemberTaskRow>();
+  return results.map((r) => ({ userId: r.user_id, name: r.name, taskId: r.task_id }));
+}
+
+/** Days marked "on" for each of these tasks, newest first. Chunked like existingTaskIds. */
+export async function onDaysByTask(db: D1Database, taskIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  for (let i = 0; i < taskIds.length; i += 50) {
+    const chunk = taskIds.slice(i, i + 50);
+    const sql = `SELECT task_id, day FROM entries WHERE on_ = 1 AND task_id IN (${chunk.map(() => '?').join(',')}) ORDER BY day DESC`;
+    const { results } = await db.prepare(sql).bind(...chunk).all<{ task_id: string; day: string }>();
+    for (const r of results) {
+      const arr = out.get(r.task_id) ?? [];
+      arr.push(r.day);
+      out.set(r.task_id, arr);
+    }
+  }
+  return out;
 }

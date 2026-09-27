@@ -10,11 +10,13 @@ import { startSync, sync } from './model/sync';
 import { startTheme, reloadThemePrefs } from './lib/theme';
 import { startNav, openSheet } from './lib/nav';
 import { MOCK, setApi } from './model/api';
+import { captureJoinHash, checkPendingJoin, startGroups } from './model/groups';
 
 async function boot(): Promise<void> {
+  captureJoinHash();
   if (MOCK) {
     setApi((await import('./dev/mockApi')).mockApi);
-    (await import('./dev/seed')).applySeedParams();
+    await (await import('./dev/seed')).applySeedParams();
   }
   migrateLegacy();
   reloadSessionPrefs();
@@ -22,6 +24,7 @@ async function boot(): Promise<void> {
   store.load();
   startTheme();
   startNav();
+  startGroups();
 
   // The status line reflects account state unless an event (sync, sign-in) says otherwise.
   effect(() => {
@@ -34,7 +37,8 @@ async function boot(): Promise<void> {
   startSync();
   const signedInNow = await finishSignIn();
   if (!signedInNow && session.value) void sync();
-  if (!session.value && !welcomed.value) openSheet('welcome');
+  const joinHandled = await checkPendingJoin();
+  if (!session.value && !welcomed.value && !joinHandled) openSheet('welcome');
   if (MOCK) (await import('./dev/seed')).applyScreenParam();
 }
 

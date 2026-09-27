@@ -2,7 +2,9 @@
 // when VITE_MOCK_API=1 so the UI can be exercised without the worker.
 import type { Api } from '../model/api';
 import { HttpError } from '../model/api';
-import type { Task, Entry, Me, SyncRequest, SyncResponse } from '../model/types';
+import type { Task, Entry, Me, SyncRequest, SyncResponse, Group, Member, GroupPreview, GroupAndTask, GroupBoard, ColorId, IconId } from '../model/types';
+import { onDays, streak, countMonth } from '../lib/stats';
+import { parseDay } from '../lib/dates';
 
 export const MOCK_TOKEN = 'mock-session-token-0123456789abcdefghijklmnopqrstuvwxyz';
 const USER: Me = { id: 'mock-sub-1', name: 'Mock User', email: 'mock@example.com' };
@@ -26,6 +28,104 @@ export function seedServerGym(days: string[]): void {
   for (const d of days) serverEntries.set(t.id + '|' + d, { taskId: t.id, day: d, on: 1, t: 0 });
 }
 
+// --- Phase 2: groups and the leaderboard --------------------------------
+// A second, fixed "member" so the leaderboard has something to show in dev
+// without a second real session. Its tasks/entries live in their own maps
+// (they are never the mock USER's, and never reachable through /sync).
+
+interface GroupRow { id: string; name: string; hostId: string; inviteCode: string; memberLimit: number; created: number }
+interface Membership { taskId: string; joined: number }
+
+const BUDDY = { id: 'mock-sub-2', name: 'Alex Kim' };
+/** A known, stable invite code for exercising the join flow in dev (`?join=mockjoin01`). */
+export const KNOWN_JOIN_CODE = 'mockjoin01';
+
+const groups = new Map<string, GroupRow>();
+const memberships = new Map<string, Map<string, Membership>>(); // groupId -> userId -> membership
+const groupMeta = new Map<string, { color: ColorId; icon: IconId }>(); // groupId -> appearance to clone on join
+const buddyTasks = new Map<string, Task>();
+const buddyEntries = new Map<string, Entry>(); // "taskId|day"
+
+function nameOf(userId: string): string {
+  return userId === USER.id ? USER.name : userId === BUDDY.id ? BUDDY.name : 'Member';
+}
+
+function genCode(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let s = '';
+  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+function isoOf(d: Date): string {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/** Adds Alex Kim as a second member of `groupId`, with a cloned task and a plausible history. */
+function addBuddyToGroup(groupId: string, name: string, color: ColorId, icon: IconId): void {
+  const taskId = 'buddy-task-' + groupId;
+  const now = Date.now();
+  buddyTasks.set(taskId, { id: taskId, ownerId: BUDDY.id, name, color, icon, archived: 0, groupId, created: now - 1, updated: now - 1, deleted: 0 });
+  const r = rng(groupId.length + 11);
+  const today = new Date();
+  for (let i = 1; i <= 60; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    if (r() < 0.6) buddyEntries.set(taskId + '|' + isoOf(d), { taskId, day: isoOf(d), on: 1, t: now - i * 86400000 });
+  }
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    buddyEntries.set(taskId + '|' + isoOf(d), { taskId, day: isoOf(d), on: 1, t: now - i * 1000 });
+  }
+  const m = memberships.get(groupId) ?? new Map<string, Membership>();
+  m.set(BUDDY.id, { taskId, joined: now - 86400000 * 5 });
+  memberships.set(groupId, m);
+}
+
+function findGroupByCode(code: string): GroupRow | undefined {
+  for (const g of groups.values()) if (g.inviteCode === code) return g;
+  return undefined;
+}
+
+function toGroup(g: GroupRow): Group {
+  return { id: g.id, name: g.name, hostId: g.hostId, inviteCode: g.inviteCode, memberLimit: g.memberLimit, members: memberships.get(g.id)?.size ?? 0, created: g.created };
+}
+
+function memberStats(userId: string, taskId: string, today: string): Member | null {
+  const task = userId === USER.id ? serverTasks.get(taskId) : buddyTasks.get(taskId);
+  if (!task || task.deleted) return null;
+  const entryMap = userId === USER.id ? serverEntries : buddyEntries;
+  const map: Record<string, Entry> = {};
+  for (const [k, e] of entryMap) if (k.startsWith(taskId + '|')) map[e.day] = e;
+  const days = onDays(map);
+  const now = parseDay(today);
+  const list = Array.from(days).sort();
+  return {
+    userId,
+    name: nameOf(userId),
+    isHost: false, // set by caller
+    isMe: userId === USER.id,
+    streak: streak(days, now),
+    month: countMonth(days, now.getFullYear(), now.getMonth()),
+    total: days.size,
+    lastDay: list.length ? list[list.length - 1]! : null,
+  };
+}
+
+/** Seed a known, joinable group hosted by "Alex Kim" for `?join=mockjoin01`. */
+(function seedKnownGroup(): void {
+  const id = 'group-known';
+  groups.set(id, { id, name: 'Morning Pages', hostId: BUDDY.id, inviteCode: KNOWN_JOIN_CODE, memberLimit: 50, created: Date.now() - 86400000 * 20 });
+  groupMeta.set(id, { color: 'blue', icon: 'pen' });
+  addBuddyToGroup(id, 'Morning Pages', 'blue', 'pen');
+})();
+
 export const mockApi: Api = {
   authStartUrl: () => '#session=' + MOCK_TOKEN,
   async me(token) {
@@ -40,7 +140,16 @@ export const mockApi: Api = {
     for (const t of body.tasks) {
       const cur = serverTasks.get(t.id);
       if (cur && cur.ownerId !== USER.id) throw new HttpError(403, 'not yours');
-      if (!cur || t.updated > cur.updated) serverTasks.set(t.id, { ...t, ownerId: USER.id });
+      if (!cur || t.updated > cur.updated) {
+        // The server owns groupId: keep whatever it already had, ignore the incoming value.
+        const merged: Task = { ...t, ownerId: USER.id, groupId: cur?.groupId };
+        if (!merged.groupId) delete merged.groupId;
+        serverTasks.set(t.id, merged);
+        if (merged.deleted && cur?.groupId) {
+          // A grouped task's deletion also drops the caller's membership.
+          memberships.get(cur.groupId)?.delete(USER.id);
+        }
+      }
     }
     for (const e of body.entries) {
       if (!serverTasks.has(e.taskId)) continue; // unknown task ids are ignored
@@ -55,5 +164,96 @@ export const mockApi: Api = {
     await delay(80);
     sessions = new Set(Array.from(sessions).filter((t) => t !== token));
     sessions.add(MOCK_TOKEN); // the mock can always sign back in
+  },
+
+  async createGroup(token, taskId) {
+    await delay(220);
+    auth(token);
+    const t = serverTasks.get(taskId);
+    if (!t || t.ownerId !== USER.id) throw new HttpError(404, 'not found');
+    if (t.deleted) throw new HttpError(400, 'task is deleted');
+    if (t.groupId) throw new HttpError(400, 'already grouped');
+    const id = 'group-' + Math.random().toString(36).slice(2, 10);
+    const g: GroupRow = { id, name: t.name, hostId: USER.id, inviteCode: genCode(), memberLimit: 50, created: Date.now() };
+    groups.set(id, g);
+    groupMeta.set(id, { color: t.color, icon: t.icon });
+    memberships.set(id, new Map([[USER.id, { taskId: t.id, joined: Date.now() }]]));
+    const updated: Task = { ...t, groupId: id, updated: Date.now() };
+    serverTasks.set(t.id, updated);
+    addBuddyToGroup(id, t.name, t.color, t.icon);
+    return { group: toGroup(g), task: updated };
+  },
+
+  async previewGroup(code): Promise<GroupPreview> {
+    await delay(180);
+    const g = findGroupByCode(code);
+    if (!g) throw new HttpError(404, 'not found');
+    return { name: g.name, hostName: nameOf(g.hostId), members: memberships.get(g.id)?.size ?? 0, memberLimit: g.memberLimit };
+  },
+
+  async joinGroup(token, code): Promise<GroupAndTask> {
+    await delay(220);
+    auth(token);
+    const g = findGroupByCode(code);
+    if (!g) throw new HttpError(404, 'not found');
+    const m = memberships.get(g.id) ?? new Map<string, Membership>();
+    const existing = m.get(USER.id);
+    if (existing) {
+      const task = serverTasks.get(existing.taskId);
+      if (task) return { group: toGroup(g), task };
+    }
+    if (m.size >= g.memberLimit) throw new HttpError(409, 'group full');
+    const meta = groupMeta.get(g.id) ?? { color: 'purple' as ColorId, icon: 'check' as IconId };
+    const now = Date.now();
+    const task: Task = { id: 'joined-' + Math.random().toString(36).slice(2, 10), ownerId: USER.id, name: g.name, color: meta.color, icon: meta.icon, archived: 0, groupId: g.id, created: now, updated: now, deleted: 0 };
+    serverTasks.set(task.id, task);
+    m.set(USER.id, { taskId: task.id, joined: now });
+    memberships.set(g.id, m);
+    return { group: toGroup(g), task };
+  },
+
+  async board(token, groupId, today): Promise<GroupBoard> {
+    await delay(200);
+    auth(token);
+    const g = groups.get(groupId);
+    const m = g ? memberships.get(groupId) : undefined;
+    if (!g || !m || !m.has(USER.id)) throw new HttpError(404, 'not found');
+    const members: Member[] = [];
+    for (const [userId, mem] of m) {
+      const stats = memberStats(userId, mem.taskId, today);
+      if (stats) members.push({ ...stats, isHost: userId === g.hostId });
+    }
+    members.sort((a, b) => b.streak - a.streak || b.month - a.month || b.total - a.total || a.name.localeCompare(b.name));
+    return { group: toGroup(g), members };
+  },
+
+  async leaveGroup(token, groupId) {
+    await delay(180);
+    auth(token);
+    const g = groups.get(groupId);
+    if (!g) throw new HttpError(404, 'not found');
+    if (g.hostId === USER.id) throw new HttpError(400, 'host cannot leave');
+    const m = memberships.get(groupId);
+    const mine = m?.get(USER.id);
+    if (!mine) throw new HttpError(404, 'not a member');
+    m!.delete(USER.id);
+    const task = serverTasks.get(mine.taskId);
+    if (task) serverTasks.set(task.id, { ...task, groupId: undefined, updated: Date.now() });
+  },
+
+  async removeMember(token, groupId, userId) {
+    await delay(180);
+    auth(token);
+    const g = groups.get(groupId);
+    if (!g) throw new HttpError(404, 'not found');
+    if (g.hostId !== USER.id) throw new HttpError(403, 'host only');
+    const m = memberships.get(groupId);
+    const target = m?.get(userId);
+    if (!target) throw new HttpError(404, 'not a member');
+    m!.delete(userId);
+    if (userId === USER.id) {
+      const task = serverTasks.get(target.taskId);
+      if (task) serverTasks.set(task.id, { ...task, groupId: undefined, updated: Date.now() });
+    }
   },
 };

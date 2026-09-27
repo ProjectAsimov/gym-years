@@ -104,6 +104,18 @@ export function updateTask(id: string, patch: Partial<Pick<Task, 'name' | 'color
   commit();
 }
 
+/**
+ * Insert or update a task straight from the server (phase 2: after `/groups`
+ * or `/groups/join`, whose response is already authoritative) without marking
+ * it pending -- the server already has this exact value.
+ */
+export function upsertServerTask(t: Task): void {
+  const list = tasks.value.filter((x) => x.id !== t.id);
+  list.push(t);
+  tasks.value = list;
+  save();
+}
+
 export function deleteTask(id: string): void {
   updateTask(id, { deleted: 1 });
 }

@@ -4,17 +4,39 @@
 import { HttpError, json } from './lib/json';
 import { corsHeaders } from './middleware/cors';
 import { authCallback, authLogout, authStart } from './routes/auth';
+import { boardRoute, createGroupRoute, joinGroupRoute, leaveRoute, previewGroupRoute, removeRoute } from './routes/groups';
 import { me } from './routes/me';
 import { sync } from './routes/sync';
 import type { Ctx, Env, Handler } from './types';
 
-const routes: Record<string, Handler> = {
+const routes: Record<string, Handler | undefined> = {
   'GET /auth/start': authStart,
   'GET /auth/callback': authCallback,
   'POST /auth/logout': authLogout,
   'GET /me': me,
   'POST /sync': sync,
+  'POST /groups': createGroupRoute,
+  'GET /groups/preview': previewGroupRoute,
+  'POST /groups/join': joinGroupRoute,
 };
+
+/** `/groups/:id/<suffix>` routes, matched when no exact entry in `routes` fits. */
+const groupIdRoutes: { method: string; suffix: string; handler: (ctx: Ctx, id: string) => Promise<Response> }[] = [
+  { method: 'GET', suffix: '/board', handler: boardRoute },
+  { method: 'POST', suffix: '/leave', handler: leaveRoute },
+  { method: 'POST', suffix: '/remove', handler: removeRoute },
+];
+
+function matchGroupIdRoute(method: string, pathname: string): { handler: (ctx: Ctx, id: string) => Promise<Response>; id: string } | null {
+  if (!pathname.startsWith('/groups/')) return null;
+  const rest = pathname.slice('/groups/'.length);
+  for (const r of groupIdRoutes) {
+    if (r.method !== method || !rest.endsWith(r.suffix)) continue;
+    const id = rest.slice(0, -r.suffix.length);
+    if (id && !id.includes('/')) return { handler: r.handler, id };
+  }
+  return null;
+}
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -23,11 +45,12 @@ export default {
 
     const url = new URL(req.url);
     const ctx: Ctx = { req, env, url, cors };
-    const handler = routes[req.method + ' ' + url.pathname];
-    if (!handler) return json({ error: 'not found' }, 404, cors);
+    const exact = routes[req.method + ' ' + url.pathname];
+    const idMatch = exact ? null : matchGroupIdRoute(req.method, url.pathname);
+    if (!exact && !idMatch) return json({ error: 'not found' }, 404, cors);
 
     try {
-      return await handler(ctx);
+      return exact ? await exact(ctx) : await idMatch!.handler(ctx, idMatch!.id);
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status, cors);
       console.error(e);

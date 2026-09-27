@@ -2,7 +2,8 @@
 .lrow-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; border: 0; background: none; padding: 6px 4px 6px 6px; text-align: left; cursor: pointer; border-radius: 12px; }
 .lrow-icon { width: 42px; height: 42px; border-radius: 13px; background: var(--lit-soft); color: var(--lit); display: grid; place-items: center; flex: none; }
 .lrow-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.lrow-name { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow-name { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 5px; }
+.lrow-group { color: var(--muted); flex: none; }
 .lrow-sub { font-size: 12px; color: var(--muted); }
 .lrow-strip { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; margin-top: 3px; max-width: 150px; }
 .lrow-strip i { aspect-ratio: 1 / 1; border-radius: 2px; background: var(--cell); display: block; }
