@@ -49,7 +49,7 @@ button{font:inherit;color:inherit}
 .icon-btn svg{width:18px;height:18px}
 .icon-btn:disabled{opacity:.3;cursor:default}
 
-.today{display:block;width:100%;border:0;border-radius:20px;padding:22px 16px;font-size:20px;font-weight:700;color:var(--btn-text);background:var(--btn);transition:transform .12s ease,box-shadow .2s ease,background .2s ease;cursor:pointer}
+.today{display:block;width:100%;border:0;border-radius:20px;padding:22px 16px;font-size:20px;font-weight:700;color:var(--btn-text);background:var(--btn);transition:transform .12s ease;cursor:pointer}
 .today:active{transform:scale(.98)}
 .today.done{background:var(--panel);color:var(--lit);box-shadow:0 0 0 2px var(--lit),0 0 28px var(--lit-soft)}
 .today small{display:block;font-size:13px;font-weight:500;opacity:.8;margin-top:6px}
@@ -106,6 +106,19 @@ button{font:inherit;color:inherit}
 .b.warn{color:var(--danger);border-color:var(--danger)}
 textarea{width:100%;min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--panel);color:var(--text);border:1px solid var(--cell);border-radius:9px;padding:10px;resize:vertical}
 .note{font-size:12px;color:var(--muted);min-height:16px;margin-top:6px}
+dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:560px;width:100%;margin:auto auto 0}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.sheet{background:var(--panel);border:1px solid var(--cell);border-bottom:0;border-radius:22px 22px 0 0;padding:18px 18px calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet-head{display:flex;align-items:center;justify-content:space-between}
+.sheet-head h2{font-size:18px;margin:0}
+.sheet-label{font-size:12px;color:var(--muted);margin:18px 0 8px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--bg);border:1px solid var(--cell);border-radius:12px;padding:3px}
+.seg button{border:0;background:transparent;border-radius:9px;padding:9px 0;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--text);box-shadow:0 0 0 1px var(--cell)}
+.swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;justify-items:center}
+.sw{width:48px;height:48px;border-radius:50%;border:0;cursor:pointer;box-shadow:0 0 0 3px var(--panel)}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 3px var(--panel),0 0 0 5px var(--text)}
+.sw:focus-visible{outline:2px solid var(--text);outline-offset:6px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -113,7 +126,7 @@ textarea{width:100%;min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace;b
 <div id="home">
 <header class="top">
   <h1>Gym years</h1>
-  <button class="icon-btn" id="theme" aria-label="Switch theme"></button>
+  <button class="icon-btn" id="theme" aria-label="Theme settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-1.8a1.7 1.7 0 0 0-1.3 2.8c.5.6.3 1.6-.4 2.2-.7.6-1.6 1-2.5 1z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.2" fill="currentColor"/></svg></button>
 </header>
 
 <button class="today" id="today"></button>
@@ -161,6 +174,18 @@ textarea{width:100%;min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace;b
   <p class="hint">Tap any past day to mark or unmark it.</p>
 </section>
 </div>
+
+<dialog id="settings" aria-labelledby="settingsTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="settingsTitle">Theme</h2><button class="b" id="done">Done</button></div>
+    <p class="sheet-label">Mode</p>
+    <div class="seg" id="modes">
+      <button data-mode="auto">Auto</button><button data-mode="light">Light</button><button data-mode="dark">Dark</button>
+    </div>
+    <p class="sheet-label">Color</p>
+    <div class="swatches" id="swatches"></div>
+  </div>
+</dialog>
 
 <script>
 (function(){
@@ -354,24 +379,70 @@ textarea{width:100%;min-height:90px;font:12px/1.4 ui-monospace,Menlo,monospace;b
     days.clear(); save(); render(); note('Erased.');
   });
 
-  // Theme: follows the phone unless the user picks one.
-  var root=document.documentElement, themeBtn=document.getElementById('theme');
-  var SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
-  var MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  // Theme: mode follows the phone unless the user picks one; accent color is a choice from ACCENTS.
+  // Each accent has a brighter shade for dark mode and a deeper one for light mode, so button text stays readable.
+  var ACCENT='gymyears.accent';
+  var ACCENTS=[
+    {id:'purple',name:'Purple',dark:'#a855f7',light:'#8b3fe0'},
+    {id:'blue',name:'Blue',dark:'#3b82f6',light:'#2563eb'},
+    {id:'teal',name:'Teal',dark:'#14b8a6',light:'#0f766e'},
+    {id:'green',name:'Green',dark:'#22c55e',light:'#15803d'},
+    {id:'yellow',name:'Yellow',dark:'#eab308',light:'#a16207'},
+    {id:'orange',name:'Orange',dark:'#f97316',light:'#c2410c'},
+    {id:'red',name:'Red',dark:'#ef4444',light:'#dc2626'},
+    {id:'pink',name:'Pink',dark:'#ec4899',light:'#db2777'}
+  ];
+  var root=document.documentElement, themeBtn=document.getElementById('theme'), sheet=document.getElementById('settings');
+  var accent='purple';
   function isLight(){ var a=root.getAttribute('data-theme'); return a?a==='light':window.matchMedia('(prefers-color-scheme: light)').matches; }
+  function rgba(hex,a){ var n=parseInt(hex.slice(1),16); return 'rgba('+(n>>16)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+  function accentHex(a,light){ for(var i=0;i<ACCENTS.length;i++) if(ACCENTS[i].id===a) return light?ACCENTS[i].light:ACCENTS[i].dark; return ACCENTS[0][light?'light':'dark']; }
   function paintTheme(){
-    var light=isLight();
-    themeBtn.innerHTML=light?MOON:SUN;
-    themeBtn.setAttribute('aria-label',light?'Switch to dark theme':'Switch to light theme');
+    var light=isLight(), c=accentHex(accent,light);
+    root.style.setProperty('--lit',c); root.style.setProperty('--btn',c);
+    root.style.setProperty('--lit-soft',rgba(c,light?.2:.28));
+    root.style.setProperty('--btn-text',light?'#ffffff':'#0c0a12');
     document.querySelector('meta[name="theme-color"]').setAttribute('content',light?'#f6f3fb':'#0c0a12');
+    var mode=root.getAttribute('data-theme')||'auto';
+    [].forEach.call(sheet.querySelectorAll('[data-mode]'),function(b){ b.setAttribute('aria-pressed',b.dataset.mode===mode?'true':'false'); });
+    [].forEach.call(sheet.querySelectorAll('[data-accent]'),function(b){
+      b.style.background=accentHex(b.dataset.accent,light);
+      b.setAttribute('aria-pressed',b.dataset.accent===accent?'true':'false');
+    });
   }
-  try{ var th=localStorage.getItem(THEME); if(th) root.setAttribute('data-theme',th); }catch(e){}
-  themeBtn.addEventListener('click',function(){
-    var next=isLight()?'dark':'light';
-    root.setAttribute('data-theme',next);
-    try{ localStorage.setItem(THEME,next); }catch(e){}
+  try{
+    var th=localStorage.getItem(THEME); if(th) root.setAttribute('data-theme',th);
+    var ac=localStorage.getItem(ACCENT); if(ac) accent=ac;
+  }catch(e){}
+
+  var sw=document.getElementById('swatches');
+  ACCENTS.forEach(function(a){
+    var b=el('button','sw'); b.dataset.accent=a.id; b.setAttribute('aria-label',a.name); b.title=a.name;
+    sw.appendChild(b);
+  });
+  sw.addEventListener('click',function(e){
+    var b=e.target.closest('[data-accent]'); if(!b) return;
+    accent=b.dataset.accent;
+    try{ localStorage.setItem(ACCENT,accent); }catch(e){}
     paintTheme();
   });
+  document.getElementById('modes').addEventListener('click',function(e){
+    var b=e.target.closest('[data-mode]'); if(!b) return;
+    try{
+      if(b.dataset.mode==='auto'){ root.removeAttribute('data-theme'); localStorage.removeItem(THEME); }
+      else{ root.setAttribute('data-theme',b.dataset.mode); localStorage.setItem(THEME,b.dataset.mode); }
+    }catch(e){}
+    paintTheme();
+  });
+
+  // The settings sheet gets a history entry too, so the phone's back button closes it.
+  themeBtn.addEventListener('click',function(){ sheet.showModal(); history.pushState({sheet:true},''); });
+  function closeSheet(){ if(history.state&&history.state.sheet) history.back(); else sheet.close(); }
+  document.getElementById('done').addEventListener('click',closeSheet);
+  sheet.addEventListener('click',function(e){ if(e.target===sheet) closeSheet(); });
+  sheet.addEventListener('cancel',function(e){ e.preventDefault(); closeSheet(); });
+  window.addEventListener('popstate',function(){ if(sheet.open) sheet.close(); });
+
   if(window.matchMedia) window.matchMedia('(prefers-color-scheme: light)').addEventListener('change',paintTheme);
   paintTheme();
 
