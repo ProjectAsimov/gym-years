@@ -113,6 +113,16 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .sheet-head{display:flex;align-items:center;justify-content:space-between}
 .sheet-head h2{font-size:18px;margin:0}
 .sheet-label{font-size:12px;color:var(--muted);margin:18px 0 8px}
+.acct{font-size:13px;color:var(--muted);margin:0 0 10px;line-height:1.5}
+.gsi{display:flex;justify-content:center;margin:6px 0 10px;min-height:44px}
+dialog.center{margin:auto;padding:16px}
+.sheet.welcome{border:1px solid var(--cell);border-radius:22px;padding:28px 22px 18px;text-align:center}
+.sheet.welcome img{border-radius:14px;margin-bottom:10px}
+.sheet.welcome h2{font-size:22px;margin:0 0 6px}
+.sheet.welcome p{font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 12px}
+.link{border:0;background:none;color:var(--muted);font-size:14px;padding:10px;cursor:pointer;text-decoration:underline}
+.status{font-size:12px;color:var(--muted);text-align:center;margin:14px 0 0;min-height:16px}
+[hidden]{display:none!important}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--bg);border:1px solid var(--cell);border-radius:12px;padding:3px}
 .seg button{border:0;background:transparent;border-radius:9px;padding:9px 0;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--panel);color:var(--text);box-shadow:0 0 0 1px var(--cell)}
@@ -127,7 +137,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div id="home">
 <header class="top">
   <h1>Gym years</h1>
-  <button class="icon-btn" id="theme" aria-label="Theme settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-1.8a1.7 1.7 0 0 0-1.3 2.8c.5.6.3 1.6-.4 2.2-.7.6-1.6 1-2.5 1z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.2" fill="currentColor"/></svg></button>
+  <button class="icon-btn" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
 
 <button class="today" id="today"></button>
@@ -141,17 +151,6 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div id="years"></div>
 <p class="home-hint">Tap the grid to open a month and edit past days.</p>
 
-<details class="tools" id="syncTools">
-  <summary>Sync across devices</summary>
-  <p id="syncHelp"></p>
-  <div id="signedOut"><div id="gsiBtn"></div></div>
-  <div class="row" id="signedIn" hidden>
-    <button class="b" id="syncNow">Sync now</button>
-    <button class="b warn" id="signOut">Sign out</button>
-  </div>
-  <div class="note" id="syncNote"></div>
-</details>
-
 <details class="tools">
   <summary>Backup and restore</summary>
   <p>Your days are stored on this device. Copy the text below somewhere safe now and then, and paste it back here if you get a new phone.</p>
@@ -164,6 +163,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   <textarea id="io" placeholder='Paste backup text here to restore, or tap "Show backup text".'></textarea>
   <div class="note" id="note"></div>
 </details>
+<p class="status" id="syncNote"></p>
 </div>
 
 <div id="monthView" hidden>
@@ -189,13 +189,38 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <dialog id="settings" aria-labelledby="settingsTitle">
   <div class="sheet">
-    <div class="sheet-head"><h2 id="settingsTitle">Theme</h2><button class="b" id="done">Done</button></div>
+    <div class="sheet-head"><h2 id="settingsTitle">Settings</h2><button class="b" id="done">Done</button></div>
+    <p class="sheet-label">Account</p>
+    <p class="acct" id="acct"></p>
+    <div class="gsi" id="gsiSettings"></div>
+    <div class="row" id="acctRow" hidden>
+      <button class="b" id="syncNow">Sync now</button>
+      <button class="b warn" id="signOut">Sign out</button>
+    </div>
+    <div id="syncSection">
+      <p class="sheet-label">Sync across devices</p>
+      <div class="seg" id="syncToggle">
+        <button data-sync="1">On</button><button data-sync="0">Off</button>
+      </div>
+      <p class="acct" id="syncHelp"></p>
+    </div>
     <p class="sheet-label">Mode</p>
     <div class="seg" id="modes">
       <button data-mode="auto">Auto</button><button data-mode="light">Light</button><button data-mode="dark">Dark</button>
     </div>
     <p class="sheet-label">Color</p>
     <div class="swatches" id="swatches"></div>
+  </div>
+</dialog>
+
+<dialog id="welcome" class="center" aria-labelledby="welcomeTitle">
+  <div class="sheet welcome">
+    <img src="icon.svg" alt="" width="56" height="56">
+    <h2 id="welcomeTitle">Gym years</h2>
+    <p>One square per day, lit on the days you trained.</p>
+    <p>Sign in so your days follow you to every device. Nothing else is shared.</p>
+    <div class="gsi" id="gsiWelcome"></div>
+    <button class="link" id="skipWelcome">Not now</button>
   </div>
 </dialog>
 
@@ -428,7 +453,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
     {id:'red',name:'Red',dark:'#ef4444',light:'#dc2626'},
     {id:'pink',name:'Pink',dark:'#ec4899',light:'#db2777'}
   ];
-  var root=document.documentElement, themeBtn=document.getElementById('theme'), sheet=document.getElementById('settings');
+  var root=document.documentElement, themeBtn=document.getElementById('settingsBtn'), sheet=document.getElementById('settings'), welcome=document.getElementById('welcome');
   var accent='purple';
   function isLight(){ var a=root.getAttribute('data-theme'); return a?a==='light':window.matchMedia('(prefers-color-scheme: light)').matches; }
   function rgba(hex,a){ var n=parseInt(hex.slice(1),16); return 'rgba('+(n>>16)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
@@ -472,13 +497,16 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
     if(typeof renderGsi==='function') renderGsi();
   });
 
-  // The settings sheet gets a history entry too, so the phone's back button closes it.
-  themeBtn.addEventListener('click',function(){ sheet.showModal(); history.pushState({sheet:true},''); });
-  function closeSheet(){ if(history.state&&history.state.sheet) history.back(); else sheet.close(); }
-  document.getElementById('done').addEventListener('click',closeSheet);
-  sheet.addEventListener('click',function(e){ if(e.target===sheet) closeSheet(); });
-  sheet.addEventListener('cancel',function(e){ e.preventDefault(); closeSheet(); });
-  window.addEventListener('popstate',function(){ if(sheet.open) sheet.close(); });
+  // Dialogs get a history entry, so the phone's back button closes them.
+  function openDialog(d){ if(d.open) return; d.showModal(); history.pushState({sheet:true},''); }
+  function closeDialog(d){ if(!d.open) return; if(history.state&&history.state.sheet) history.back(); else d.close(); }
+  themeBtn.addEventListener('click',function(){ openDialog(sheet); });
+  document.getElementById('done').addEventListener('click',function(){ closeDialog(sheet); });
+  [sheet,welcome].forEach(function(d){
+    d.addEventListener('click',function(e){ if(e.target===d) closeDialog(d); });
+    d.addEventListener('cancel',function(e){ e.preventDefault(); closeDialog(d); });
+  });
+  window.addEventListener('popstate',function(){ if(sheet.open) sheet.close(); if(welcome.open) welcome.close(); });
 
   if(window.matchMedia) window.matchMedia('(prefers-color-scheme: light)').addEventListener('change',paintTheme);
   paintTheme();
@@ -486,39 +514,59 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   // Sync: the user signs in with Google once; the worker swaps Google's ID token for a
   // 90-day session token kept here. The whole log is posted and the worker sends back
   // the merged log (newest change per day wins).
+  // Sync is on by default; turning it off keeps the sign-in but stops talking to the server.
+  var SYNC_ON='gymyears.syncon', WELCOMED='gymyears.welcomed';
   var session=null, syncTimer=null, syncBusy=false, syncAt=0, gsiReady=false;
   try{ session=JSON.parse(localStorage.getItem(SESSION)||'null'); localStorage.removeItem('gymyears.sync'); }catch(e){}
   var $=function(id){ return document.getElementById(id); };
+  function syncOn(){ try{ return localStorage.getItem(SYNC_ON)!=='0'; }catch(e){ return true; } }
   function syncNote(t){ $('syncNote').textContent=t||''; }
   function setSession(s){ session=s; try{ if(s) localStorage.setItem(SESSION,JSON.stringify(s)); else localStorage.removeItem(SESSION); }catch(e){} paintSync(); }
   function paintSync(){
-    var ready=!!SYNC_URL&&!!GOOGLE_CLIENT_ID, on=ready&&!!session;
-    $('signedOut').hidden=on||!ready; $('signedIn').hidden=!on;
-    $('syncHelp').textContent=!ready?'Sync is not set up in this build.'
-      :on?'Signed in as '+(session.email||session.name||'your Google account')+'. Your days sync to every device signed in with this account.'
-      :'Sign in with Google to keep the same days on every device. Days already on this device are kept and merged in.';
+    var ready=!!SYNC_URL&&!!GOOGLE_CLIENT_ID, on=ready&&!!session, enabled=syncOn();
+    $('acct').textContent=!ready?'Sync is not set up in this build.'
+      :on?'Signed in as '+(session.email||session.name||'your Google account')+'.'
+      :'Not signed in. Days are kept only on this device.';
+    $('gsiSettings').hidden=on||!ready; $('acctRow').hidden=!on; $('syncNow').hidden=!enabled;
+    $('syncSection').hidden=!on;
+    [].forEach.call($('syncToggle').children,function(b){ b.setAttribute('aria-pressed',(b.dataset.sync==='1')===enabled?'true':'false'); });
+    $('syncHelp').textContent=enabled?'Changes reach every device signed in with this account.':'Changes stay on this device until you turn sync back on.';
+    if(!on) syncNote(ready?'Not signed in. Days are kept only on this device.':'');
+    else if(!enabled) syncNote('Sync is off.');
     if(ready&&!on) renderGsi();
   }
   function renderGsi(){
     if(!gsiReady||!window.google||!google.accounts) return;
-    var host=$('gsiBtn'); host.innerHTML='';
-    google.accounts.id.renderButton(host,{theme:isLight()?'outline':'filled_black',size:'large',shape:'pill',text:'signin_with',width:Math.min(300,host.clientWidth||300)});
+    ['gsiSettings','gsiWelcome'].forEach(function(id){
+      var host=$(id); host.innerHTML='';
+      var w=Math.min(320,Math.max(200,host.clientWidth||320));
+      google.accounts.id.renderButton(host,{theme:isLight()?'outline':'filled_black',size:'large',shape:'pill',text:'signin_with',width:w});
+    });
   }
   window.onGoogleLibraryLoad=function(){
     gsiReady=true;
     google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:onGoogleCredential,ux_mode:'popup',itp_support:true});
     paintSync();
+    var seen=false; try{ seen=localStorage.getItem(WELCOMED)==='1'; }catch(e){}
+    if(!session&&!seen&&!sheet.open) openDialog(welcome);
   };
+  function markWelcomed(){ try{ localStorage.setItem(WELCOMED,'1'); }catch(e){} }
+  $('skipWelcome').addEventListener('click',function(){ markWelcomed(); closeDialog(welcome); });
   function onGoogleCredential(resp){
     syncNote('Signing in…');
     fetch(SYNC_URL+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})})
       .then(function(r){ if(!r.ok) throw new Error('Sign-in was not accepted ('+r.status+').'); return r.json(); })
-      .then(function(data){ setSession({token:data.token,name:data.name,email:data.email}); syncNote(''); sync(); })
+      .then(function(data){ markWelcomed(); closeDialog(welcome); setSession({token:data.token,name:data.name,email:data.email}); syncNote(''); sync(); })
       .catch(function(e){ syncNote((e&&e.message)||'Could not reach the sync server.'); });
   }
-  function queueSync(){ if(!SYNC_URL||!session) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync,1500); }
+  $('syncToggle').addEventListener('click',function(e){
+    var b=e.target.closest('[data-sync]'); if(!b) return;
+    try{ localStorage.setItem(SYNC_ON,b.dataset.sync); }catch(e){}
+    paintSync(); if(syncOn()) sync();
+  });
+  function queueSync(){ if(!SYNC_URL||!session||!syncOn()) return; clearTimeout(syncTimer); syncTimer=setTimeout(sync,1500); }
   function sync(){
-    if(!SYNC_URL||!session||syncBusy) return;
+    if(!SYNC_URL||!session||!syncOn()||syncBusy) return;
     if(!navigator.onLine){ syncNote('Offline. Will sync when back online.'); return; }
     syncBusy=true; syncNote('Syncing…');
     var snapshot=JSON.stringify(log);
@@ -532,7 +580,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
         // Keep anything changed while the request was in flight.
         if(JSON.stringify(log)!==snapshot){ Object.keys(log).forEach(function(k){ if(!merged[k]||log[k].t>merged[k].t) merged[k]=log[k]; }); }
         log=merged; rebuildDays(); save(); render();
-        syncAt=Date.now(); syncNote('Synced just now. '+days.size+' days.');
+        syncAt=Date.now(); syncNote('Synced just now.');
       })
       .catch(function(e){ syncNote((e&&e.message)||'Could not reach the sync server. Will retry.'); })
       .then(function(){ syncBusy=false; });
